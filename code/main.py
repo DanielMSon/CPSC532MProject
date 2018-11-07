@@ -1,6 +1,9 @@
 import argparse
 import numpy as np
 import pandas as pd
+from utils import standardize_dataset
+from sklearn.linear_model import Lasso
+from sklearn.utils import resample
 
 from sklearn.preprocessing import LabelEncoder
 
@@ -21,8 +24,7 @@ if __name__ == "__main__":
 
     elif question == "fill_missing_val":
         X_train = pd.read_csv('../data/train.csv')
-        
-        X_train.drop('SalePrice', axis=1, inplace=True)
+
         print("Size before pre-processing: ", X_train.shape)
 
         # region NULL_ENTRY_CLEAN_UP
@@ -57,14 +59,10 @@ if __name__ == "__main__":
         # endregion
 
         # region HOT_ENCODE
-
-        # MSSubClass describes type of house. Described numerically but it should be categorical. Convert to string
-        X_train['MSSubClass'] = X_train['MSSubClass'].apply(str)
-
         cols = ('MSSubClass', 'MSZoning', 'Alley', 'LotConfig', 'LandContour', 'Condition1', 'Condition2', 'BldgType',
                 'HouseStyle', 'RoofStyle', 'RoofMatl', 'Exterior1st', 'Exterior2nd', 'MasVnrType', 'Foundation',
                 'Heating', 'Electrical', 'GarageType', 'Utilities', 'Neighborhood', 'MiscFeature', 'SaleType',
-                'SaleCondition')
+                'SaleCondition', 'Fence')
         for c in cols:
             X_train = pd.concat([X_train, pd.get_dummies(X_train[c], prefix=c)], axis=1)
             X_train.drop(c, axis=1, inplace=True)
@@ -109,7 +107,29 @@ if __name__ == "__main__":
         X_train['CentralAir'] = X_train['CentralAir'].replace(mapper)
         # endregion
 
-        X_train.to_csv('../data/train_preprocessed.csv')
+        X_train.to_csv('../data/train_preprocessed.csv', index=False)
+
+    elif question == "feature_selection":
+        X_train = pd.read_csv('../data/train_preprocessed.csv')
+        X_train, y_train = standardize_dataset(X_train)
+
+        print(X_train.shape)
+
+        # X_train.to_csv('../data/train_preprocessed_standardized.csv', index=False)
+
+        X_boot, y_boot = resample(X_train, y_train, n_samples=X_train.shape[0])  # make bootstrap sample
+        model = Lasso(alpha=0.1)
+        model.fit(X_boot, y_boot)
+        E_train = np.sum(abs(model.predict(X_boot) - y_boot))
+        E_valid = np.sum(abs(model.predict(X_train)-y_train))
+
+        print("E_train: ", E_train)
+        print("E_valid: ", E_valid)
+
+        # print(list(zip(model.coef_, X_train.columns)))
+        # weightArray = pd.DataFrame(model.coef_, columns=X_train.columns)
+        # print(weightArray)
+
 
 
 
