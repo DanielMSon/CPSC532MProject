@@ -21,6 +21,8 @@ if __name__ == "__main__":
 
     elif question == "fill_missing_val":
         X_train = pd.read_csv('../data/train.csv')
+        
+        X_train.drop('SalePrice', axis=1, inplace=True)
         print("Size before pre-processing: ", X_train.shape)
 
         # region NULL_ENTRY_CLEAN_UP
