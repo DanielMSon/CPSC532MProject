@@ -5,6 +5,7 @@ from utils import standardize_dataset
 from sklearn.linear_model import Lasso
 from sklearn.utils import resample
 from sklearn.model_selection import KFold
+from sklearn.linear_model import LinearRegression
 
 from sklearn.preprocessing import LabelEncoder
 
@@ -116,17 +117,41 @@ if __name__ == "__main__":
         lammy_max = 0.5
         lammy_interval = 0.01
 
+        n_bootstraps = 10
+
         n_splits = 10
         kf = KFold(n_splits=n_splits)
         kf.get_n_splits(data)
         for lammy in np.arange(0, lammy_max, lammy_interval):
+            # bootstrap and calculate weights
+            X_train, y_train, _, _ = standardize_dataset(data, data)
+            coef_matrix = np.zeros((n_bootstraps, X_train.shape[1]))
+            for i in range(0, n_bootstraps):
+                X_boot, y_boot = resample(X_train, y_train, n_samples=X_train.shape[0])
+                model = Lasso(alpha=lammy)
+                model.fit(X_boot, y_boot)
+                coef_matrix[i, :] = model.coef_
+
+            # detect feature weights that don't meet 90% intersection
+            col_drop_list = []
+            for c in range(0, X_train.shape[1]):
+                non_zero = np.count_nonzero(coef_matrix[:, c])
+                if non_zero < coef_matrix.shape[0]*0.9:
+                    # print("column %i should be dropped" % c)
+                    col_drop_list.append(c)
+            X_train.drop(X_train.columns[col_drop_list], axis=1, inplace=True)  # drop the features that aren't significant
+
+            # run cross validation to evaluate E_valid only considering significant features.
+            # Use un-regularized least square model to fit for weights
+            data_input = pd.concat([X_train, y_train], axis=1)
             E_train_list = []
             E_valid_list = []
             for train_index, valid_index in kf.split(data):
-                X_train, X_valid = data.iloc[train_index], data.iloc[valid_index]
+                X_train, X_valid = data_input.iloc[train_index], data_input.iloc[valid_index]
                 X_train, y_train, X_valid, y_valid = standardize_dataset(X_train, X_valid)
 
-                model = Lasso(alpha=lammy)
+                # model = Lasso(alpha=0)
+                model = LinearRegression()
                 model.fit(X_train, y_train)
                 E_train_list.append(np.mean(abs(model.predict(X_train) - y_train)))
                 E_valid_list.append(np.mean(abs(model.predict(X_valid) - y_valid)))
@@ -137,15 +162,35 @@ if __name__ == "__main__":
             E_valid = sum(E_valid_list)/len(E_valid_list)
             print("For lambda = %0.2f, E_train: %0.3f, E_valid: %0.3f, E_approx: %0.3f" %(lammy, E_train, E_valid, E_valid-E_train))
 
-        # print(list(zip(model.coef_, X_train.columns)))
-        # weightArray = pd.DataFrame(model.coef_, columns=X_train.columns)
-        # print(weightArray)
+    elif question == "feature_select":
+        lammy = 0.01
+        n_bootstraps = 200
+        data = pd.read_csv('../data/train_preprocessed.csv')
+        X_train, y_train, _, _ = standardize_dataset(data, data)
+        coef_matrix = np.zeros((n_bootstraps, X_train.shape[1]))
 
-        # X_boot, y_boot = resample(X_train, y_train, n_samples=X_train.shape[0])  # make bootstrap sample
-        # model = Lasso(alpha=0.1)
-        # model.fit(X_boot, y_boot)
-        # E_train = np.sum(abs(model.predict(X_boot) - y_boot))
-        # E_valid = np.sum(abs(model.predict(X_train)-y_train))
+        for i in range(0, n_bootstraps):
+            X_boot, y_boot = resample(X_train, y_train, n_samples=X_train.shape[0])
+            model = Lasso(alpha=lammy)
+            model.fit(X_boot, y_boot)
+            coef_matrix[i, :] = model.coef_
+
+        # detect feature weights that don't meet 90% intersection
+        col_drop_list = []
+        label_name_list = list(X_train)
+        for c in range(0, X_train.shape[1]):
+            non_zero = np.count_nonzero(coef_matrix[:, c])
+            if non_zero < coef_matrix.shape[0] * 0.9:
+                print("column %i or %s should be dropped" % (c, label_name_list[c]))
+                col_drop_list.append(c)
+        X_train.drop(X_train.columns[col_drop_list], axis=1, inplace=True)  # drop the features that aren't significant
+        print("Number of features dropped: ", len(col_drop_list))
+        label_name_list = list(X_train)
+        print("Number of features kept: ", len(label_name_list))
+        print("These are the features kept:")
+        for feature in label_name_list:
+            print(feature)
+        # print("These features are significant: ", label_name_list)
 
 
 
