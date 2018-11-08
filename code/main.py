@@ -4,6 +4,7 @@ import pandas as pd
 from utils import standardize_dataset
 from sklearn.linear_model import Lasso
 from sklearn.utils import resample
+from sklearn.model_selection import KFold
 
 from sklearn.preprocessing import LabelEncoder
 
@@ -109,26 +110,42 @@ if __name__ == "__main__":
 
         X_train.to_csv('../data/train_preprocessed.csv', index=False)
 
-    elif question == "feature_selection":
-        X_train = pd.read_csv('../data/train_preprocessed.csv')
-        X_train, y_train = standardize_dataset(X_train)
+    elif question == "feature_select_lambda":
+        data = pd.read_csv('../data/train_preprocessed.csv')
 
-        print(X_train.shape)
+        lammy_max = 0.5
+        lammy_interval = 0.01
 
-        # X_train.to_csv('../data/train_preprocessed_standardized.csv', index=False)
+        n_splits = 10
+        kf = KFold(n_splits=n_splits)
+        kf.get_n_splits(data)
+        for lammy in np.arange(0, lammy_max, lammy_interval):
+            E_train_list = []
+            E_valid_list = []
+            for train_index, valid_index in kf.split(data):
+                X_train, X_valid = data.iloc[train_index], data.iloc[valid_index]
+                X_train, y_train, X_valid, y_valid = standardize_dataset(X_train, X_valid)
 
-        X_boot, y_boot = resample(X_train, y_train, n_samples=X_train.shape[0])  # make bootstrap sample
-        model = Lasso(alpha=0.1)
-        model.fit(X_boot, y_boot)
-        E_train = np.sum(abs(model.predict(X_boot) - y_boot))
-        E_valid = np.sum(abs(model.predict(X_train)-y_train))
+                model = Lasso(alpha=lammy)
+                model.fit(X_train, y_train)
+                E_train_list.append(np.mean(abs(model.predict(X_train) - y_train)))
+                E_valid_list.append(np.mean(abs(model.predict(X_valid) - y_valid)))
 
-        print("E_train: ", E_train)
-        print("E_valid: ", E_valid)
+                #print("for lambda=", lammy, " ", list(zip(model.coef_, X_train.columns)))
+
+            E_train = sum(E_train_list)/len(E_train_list)
+            E_valid = sum(E_valid_list)/len(E_valid_list)
+            print("For lambda = %0.2f, E_train: %0.3f, E_valid: %0.3f, E_approx: %0.3f" %(lammy, E_train, E_valid, E_valid-E_train))
 
         # print(list(zip(model.coef_, X_train.columns)))
         # weightArray = pd.DataFrame(model.coef_, columns=X_train.columns)
         # print(weightArray)
+
+        # X_boot, y_boot = resample(X_train, y_train, n_samples=X_train.shape[0])  # make bootstrap sample
+        # model = Lasso(alpha=0.1)
+        # model.fit(X_boot, y_boot)
+        # E_train = np.sum(abs(model.predict(X_boot) - y_boot))
+        # E_valid = np.sum(abs(model.predict(X_train)-y_train))
 
 
 
