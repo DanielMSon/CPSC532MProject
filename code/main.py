@@ -15,6 +15,7 @@ if __name__ == "__main__":
     io_args = parser.parse_args()
     question = io_args.question
 
+    # Show top 20 features that has the highest proportion of null (or 'NA') entries.
     if question == "missing_val":
         X_train = pd.read_csv('../data/train.csv')
 
@@ -24,33 +25,35 @@ if __name__ == "__main__":
         missing_data = pd.DataFrame({'Missing Ratio': train_data_na})
         print(missing_data.head(20))  # print top 20 features with significant null entries
 
-    elif question == "fill_missing_val":
+    # Fill in missing entries and change categorical into numerical features. Standardization not included
+    elif question == "pre_processing":
         X_train = pd.read_csv('../data/train.csv')
 
         print("Size before pre-processing: ", X_train.shape)
 
+        # Fill in missing (or null entries)
         # region NULL_ENTRY_CLEAN_UP
-        # state "None" to say these features don't exist
+        # entries of units without these feature is NA. State "None" to say these features don't exist
         for col in ('PoolQC', 'MiscFeature', 'Alley', 'Fence', 'FireplaceQu'):
             X_train[col] = X_train[col].fillna('None')
 
-        # houses in same neighbourhood should have similar lot frontage. Assign median of neighbourhood
+        # units in same neighbourhood should have similar lot frontage. Assign median of its neighbourhood to unit
         X_train["LotFrontage"] = X_train.groupby("Neighborhood")["LotFrontage"].transform(
             lambda x: x.fillna(x.median()))
 
-        # houses with no garage has these features as NA. Set to "None"
+        # units with no garage has these features as NA. Set to "None"
         for col in ('GarageType', 'GarageFinish', 'GarageQual', 'GarageCond'):
             X_train[col] = X_train[col].fillna('None')
 
-        # houses with no garage has this feature as NA. Set the year to 0. Although may need to classify this
+        # units with no garage has this feature as NA. Set the year to 0. Although may need to classify this
         # categorically somehow instead
         X_train['GarageYrBlt'] = X_train['GarageYrBlt'].fillna(0)
 
-        # houses with no basement has this feature as NA. Set to "None"
+        # units with no basement has this feature as NA. Set to "None"
         for col in ('BsmtQual', 'BsmtCond', 'BsmtExposure', 'BsmtFinType1', 'BsmtFinType2'):
             X_train[col] = X_train[col].fillna('None')
 
-        # missing entries. Assume that no masonry veneer exists. Set type as "None" and area as 0
+        # assume missing entries due to no masonry veneer existing. Set type as "None" and area as 0
         X_train["MasVnrType"] = X_train["MasVnrType"].fillna("None")
         X_train["MasVnrArea"] = X_train["MasVnrArea"].fillna(0)
 
@@ -60,6 +63,7 @@ if __name__ == "__main__":
         print("Size after dropping rows with nan entries: ", X_train.shape)
         # endregion
 
+        # Turn categorical features' unique entries into a binary features of its own
         # region HOT_ENCODE
         cols = ('MSSubClass', 'MSZoning', 'Alley', 'LotConfig', 'LandContour', 'Condition1', 'Condition2', 'BldgType',
                 'HouseStyle', 'RoofStyle', 'RoofMatl', 'Exterior1st', 'Exterior2nd', 'MasVnrType', 'Foundation',
@@ -72,6 +76,7 @@ if __name__ == "__main__":
         print("Size after hot encoding: ", X_train.shape)
         # endregion
 
+        # Turn categorical features' unique entries into int. Do this for features where ranking in order has meaning
         # region LABEL_ENCODE
         mapper = {'None': 0, 'Po': 1, 'Fa': 2, 'TA': 3, 'Gd': 4, 'Ex': 5}
         cols = ('ExterQual', 'ExterCond', 'BsmtQual', 'BsmtCond', 'HeatingQC', 'KitchenQual', 'FireplaceQu',
@@ -111,24 +116,26 @@ if __name__ == "__main__":
 
         X_train.to_csv('../data/train_preprocessed.csv', index=False)
 
+    # Over varying lambda, bolasso to select features and calculate cross validated least square (with only selected
+    # features) as score. Use to find optimal lambda
     elif question == "feature_select_lambda":
         data = pd.read_csv('../data/train_preprocessed.csv')
 
-        lammy_max = 0.5
-        lammy_interval = 0.01
+        # hyper-parameters
+        lammy_max = 0.1  # max lambda value to try up to (not inclusive). Start from 0
+        lammy_interval = 0.005  # lambda value interval to increase each iteration
+        n_bootstraps = 20  # number of bootstrap samples to generate for feature selection
+        n_splits = 20  # number of cross validation folds to perform when calculating score for each lambda
 
-        n_bootstraps = 10
-
-        n_splits = 10
         kf = KFold(n_splits=n_splits)
         kf.get_n_splits(data)
         for lammy in np.arange(0, lammy_max, lammy_interval):
             # bootstrap and calculate weights
             X_train, y_train, _, _ = standardize_dataset(data, data)
-            coef_matrix = np.zeros((n_bootstraps, X_train.shape[1]))
+            coef_matrix = np.zeros((n_bootstraps, X_train.shape[1]))  # make matrix to store each bootstrap lasso weight
             for i in range(0, n_bootstraps):
-                X_boot, y_boot = resample(X_train, y_train, n_samples=X_train.shape[0])
-                model = Lasso(alpha=lammy)
+                X_boot, y_boot = resample(X_train, y_train, n_samples=X_train.shape[0])  # make bootstrap data set
+                model = Lasso(alpha=lammy, fit_intercept=False)
                 model.fit(X_boot, y_boot)
                 coef_matrix[i, :] = model.coef_
 
@@ -136,13 +143,12 @@ if __name__ == "__main__":
             col_drop_list = []
             for c in range(0, X_train.shape[1]):
                 non_zero = np.count_nonzero(coef_matrix[:, c])
-                if non_zero < coef_matrix.shape[0]*0.9:
-                    # print("column %i should be dropped" % c)
+                if non_zero < coef_matrix.shape[0]*0.9:  # check if weight is significant less than 90% of bootstrap runs
                     col_drop_list.append(c)
-            X_train.drop(X_train.columns[col_drop_list], axis=1, inplace=True)  # drop the features that aren't significant
+            X_train.drop(X_train.columns[col_drop_list], axis=1, inplace=True)  # drop insignificant features
 
-            # run cross validation to evaluate E_valid only considering significant features.
-            # Use un-regularized least square model to fit for weights
+            # run cross validation to evaluate E_valid only considering significant features. Use un-regularized least
+            # square model to fit for weights and evaluate E_valid
             data_input = pd.concat([X_train, y_train], axis=1)
             E_train_list = []
             E_valid_list = []
@@ -150,28 +156,33 @@ if __name__ == "__main__":
                 X_train, X_valid = data_input.iloc[train_index], data_input.iloc[valid_index]
                 X_train, y_train, X_valid, y_valid = standardize_dataset(X_train, X_valid)
 
-                # model = Lasso(alpha=0)
-                model = LinearRegression()
+                # model = Lasso(alpha=0, fit_intercept=False)
+                model = LinearRegression(fit_intercept=False)
                 model.fit(X_train, y_train)
                 E_train_list.append(np.mean(abs(model.predict(X_train) - y_train)))
                 E_valid_list.append(np.mean(abs(model.predict(X_valid) - y_valid)))
 
-                #print("for lambda=", lammy, " ", list(zip(model.coef_, X_train.columns)))
-
+            # calculate average of errors over cross validation
             E_train = sum(E_train_list)/len(E_train_list)
             E_valid = sum(E_valid_list)/len(E_valid_list)
-            print("For lambda = %0.2f, E_train: %0.3f, E_valid: %0.3f, E_approx: %0.3f" %(lammy, E_train, E_valid, E_valid-E_train))
+            print("For lambda = %0.3f, E_train: %0.3f, E_valid: %0.3f, E_approx: %0.3f" % (lammy, E_train, E_valid,
+                                                                                           E_valid - E_train))
 
+    # Run more extensive bolasso over given lambda value. Prints features to keep and drop. Saves data set with only
+    # significant features (and y or SalePrice) as a csv.
     elif question == "feature_select":
+        data = pd.read_csv('../data/train_preprocessed.csv')
+
+        # hyper-parameters
         lammy = 0.01
         n_bootstraps = 200
-        data = pd.read_csv('../data/train_preprocessed.csv')
+
         X_train, y_train, _, _ = standardize_dataset(data, data)
         coef_matrix = np.zeros((n_bootstraps, X_train.shape[1]))
 
         for i in range(0, n_bootstraps):
             X_boot, y_boot = resample(X_train, y_train, n_samples=X_train.shape[0])
-            model = Lasso(alpha=lammy)
+            model = Lasso(alpha=lammy, fit_intercept=False)
             model.fit(X_boot, y_boot)
             coef_matrix[i, :] = model.coef_
 
@@ -184,13 +195,25 @@ if __name__ == "__main__":
                 print("column %i or %s should be dropped" % (c, label_name_list[c]))
                 col_drop_list.append(c)
         X_train.drop(X_train.columns[col_drop_list], axis=1, inplace=True)  # drop the features that aren't significant
-        print("Number of features dropped: ", len(col_drop_list))
         label_name_list = list(X_train)
+
+        # save un-standardized data set with only significant features (this has X and y).
+        DFYint = pd.DataFrame(np.ones((data.shape[0], 1)), columns=['y-intercept'])
+        data = pd.concat([DFYint, data], axis=1)
+        SalePriceCol = data['SalePrice']
+        data.drop(labels=['SalePrice'], axis=1, inplace=True)
+        data.drop(data.columns[col_drop_list], axis=1, inplace=True)
+        data.insert(0, 'SalePrice', SalePriceCol)
+        data.to_csv('../data/train_sig_features.csv', index=False)
+
+        # report
+        print("Number of features dropped: ", len(col_drop_list))
         print("Number of features kept: ", len(label_name_list))
-        print("These are the features kept:")
+        print("These are the features kept: ")
         for feature in label_name_list:
             print(feature)
-        # print("These features are significant: ", label_name_list)
+
+
 
 
 

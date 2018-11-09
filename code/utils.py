@@ -1,11 +1,10 @@
 import numpy as np
 import pandas as pd
 
-def standardize_cols(X, mu=None, sigma=None):
-    # Standardize each column with mean 0 and variance 1
-    # n_rows, n_cols = X.shape
 
-    X_values = X.values
+# Standardize each column with mean 0 and standard deviation 1
+def standardize_cols(X, mu=None, sigma=None):
+    X_values = X.values  # convert pandas dataframe into numpy array
 
     if mu is None:
         mu = np.mean(X_values, axis=0)
@@ -14,14 +13,14 @@ def standardize_cols(X, mu=None, sigma=None):
         sigma = np.std(X_values, axis=0)
         sigma[sigma < 1e-8] = 1.
 
-    X = pd.DataFrame((X_values - mu) / sigma, columns=X.columns)
+    X = pd.DataFrame((X_values - mu) / sigma, columns=X.columns)  # convert numpy array into pandas dataframe
 
     return X, mu, sigma
 
-
+# Standardize dataset. For validation dataset, take mean and standard deviation of each column from training dataset to
+# preserve golden rule. Adds a bias column (column of all 1) if include_y_int=True. Separate dataset into set of
+# features and label vector
 def standardize_dataset(data, data_valid, include_y_int=True):
-    # Load and standardize the data and add the bias term
-
     data, mu, sigma = standardize_cols(data)
     data_valid, _, _ = standardize_cols(data_valid, mu=mu, sigma=sigma)
 
