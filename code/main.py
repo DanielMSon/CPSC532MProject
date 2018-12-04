@@ -6,6 +6,12 @@ from sklearn.linear_model import Lasso
 from sklearn.utils import resample
 from sklearn.model_selection import KFold
 from sklearn.linear_model import LinearRegression
+import matplotlib.pyplot as plt  # Matlab-style plotting
+import seaborn as sns
+from scipy import stats
+from scipy.stats import norm, skew
+from scipy.special import boxcox1p
+from scipy.stats import boxcox_normmax
 
 from sklearn.preprocessing import LabelEncoder
 
@@ -63,19 +69,6 @@ if __name__ == "__main__":
         print("Size after dropping rows with nan entries: ", X_train.shape)
         # endregion
 
-        # Turn categorical features' unique entries into a binary features of its own
-        # region HOT_ENCODE
-        cols = ('MSSubClass', 'MSZoning', 'Alley', 'LotConfig', 'LandContour', 'Condition1', 'Condition2', 'BldgType',
-                'HouseStyle', 'RoofStyle', 'RoofMatl', 'Exterior1st', 'Exterior2nd', 'MasVnrType', 'Foundation',
-                'Heating', 'Electrical', 'GarageType', 'Utilities', 'Neighborhood', 'MiscFeature', 'SaleType',
-                'SaleCondition', 'Fence')
-        for c in cols:
-            X_train = pd.concat([X_train, pd.get_dummies(X_train[c], prefix=c)], axis=1)
-            X_train.drop(c, axis=1, inplace=True)
-
-        print("Size after hot encoding: ", X_train.shape)
-        # endregion
-
         # Turn categorical features' unique entries into int. Do this for features where ranking in order has meaning
         # region LABEL_ENCODE
         mapper = {'None': 0, 'Po': 1, 'Fa': 2, 'TA': 3, 'Gd': 4, 'Ex': 5}
@@ -114,6 +107,56 @@ if __name__ == "__main__":
         X_train['CentralAir'] = X_train['CentralAir'].replace(mapper)
         # endregion
 
+        # Correct the skew on target variable and features to make it more normally distributed for better linear model
+        # prediction. Placed after label encode but before hot encode to regard ordinal feature but not categorical
+        # feature.
+        # region SKEW_CORRECTION
+        # Correct target skew by using log(1+x)
+        X_train["SalePrice"] = np.log1p(X_train["SalePrice"])  # remember to cancel out the skew correct after prediction by using np.expm1(X_train["SalePrice"])
+
+        # # Check the new distribution
+        # sns.distplot(X_train['SalePrice'], fit=norm);
+        # # Get the fitted parameters used by the function
+        # (mu, sigma) = norm.fit(X_train['SalePrice'])
+        # print('\n mu = {:.2f} and sigma = {:.2f}\n'.format(mu, sigma))
+        # # Now plot the distribution
+        # plt.legend(['Normal dist. ($\mu=$ {:.2f} and $\sigma=$ {:.2f} )'.format(mu, sigma)],
+        #            loc='best')
+        # plt.ylabel('Frequency')
+        # plt.title('SalePrice distribution')
+        # # Get also the QQ-plot
+        # fig = plt.figure()
+        # res = stats.probplot(X_train['SalePrice'], plot=plt)
+        # plt.show()
+
+        # correcting feature skew
+        numeric_feats = X_train.dtypes[X_train.dtypes != "object"].index
+
+        skewed_feats = X_train[numeric_feats].apply(lambda x: skew(x.dropna())).sort_values(ascending=False) # Check the skew of all numerical features
+        print("\nSkew in numerical features: \n")
+        skewness = pd.DataFrame({'Skew': skewed_feats})
+        print(skewness.head(30))
+
+        skewness = skewness[abs(skewness) > 0.75]
+        skewness.dropna(inplace=True)
+        print("There are {} skewed numerical features to correct".format(skewness.shape[0]))
+
+        X_train[skewness.index] = np.log1p(X_train[skewness.index])
+        # endregion
+
+        # Turn categorical features' unique entries into a binary features of its own
+        # region HOT_ENCODE
+        cols = ('MSSubClass', 'MSZoning', 'Alley', 'LotConfig', 'LandContour', 'Condition1', 'Condition2', 'BldgType',
+                'HouseStyle', 'RoofStyle', 'RoofMatl', 'Exterior1st', 'Exterior2nd', 'MasVnrType', 'Foundation',
+                'Heating', 'Electrical', 'GarageType', 'Utilities', 'Neighborhood', 'MiscFeature', 'SaleType',
+                'SaleCondition', 'Fence')
+        for c in cols:
+            X_train = pd.concat([X_train, pd.get_dummies(X_train[c], prefix=c)], axis=1)
+            X_train.drop(c, axis=1, inplace=True)
+
+        print("Size after hot encoding: ", X_train.shape)
+        # endregion
+
         X_train.to_csv('../data/train_preprocessed.csv', index=False)
 
     # Over varying lambda, bolasso to select features and calculate cross validated least square (with only selected
@@ -122,8 +165,8 @@ if __name__ == "__main__":
         data = pd.read_csv('../data/train_preprocessed.csv')
 
         # hyper-parameters
-        lammy_max = 0.1  # max lambda value to try up to (not inclusive). Start from 0
-        lammy_interval = 0.005  # lambda value interval to increase each iteration
+        lammy_max = 0.05  # max lambda value to try up to (not inclusive). Start from 0
+        lammy_interval = 0.0005  # lambda value interval to increase each iteration
         n_bootstraps = 20  # number of bootstrap samples to generate for feature selection
         n_splits = 20  # number of cross validation folds to perform when calculating score for each lambda
 
@@ -165,7 +208,7 @@ if __name__ == "__main__":
             # calculate average of errors over cross validation
             E_train = sum(E_train_list)/len(E_train_list)
             E_valid = sum(E_valid_list)/len(E_valid_list)
-            print("For lambda = %0.3f, E_train: %0.3f, E_valid: %0.3f, E_approx: %0.3f" % (lammy, E_train, E_valid,
+            print("For lambda = %0.4f, E_train: %0.3f, E_valid: %0.3f, E_approx: %0.3f" % (lammy, E_train, E_valid,
                                                                                            E_valid - E_train))
 
     # Run more extensive bolasso over given lambda value. Prints features to keep and drop. Saves data set with only
@@ -175,7 +218,7 @@ if __name__ == "__main__":
 
         # hyper-parameters
         lammy = 0.01
-        n_bootstraps = 200
+        n_bootstraps = 400
 
         X_train, y_train, _, _ = standardize_dataset(data, data)
         coef_matrix = np.zeros((n_bootstraps, X_train.shape[1]))
