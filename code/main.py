@@ -112,7 +112,7 @@ if __name__ == "__main__":
         # feature.
         # region SKEW_CORRECTION
         # Correct target skew by using log(1+x)
-        X_train["SalePrice"] = np.log1p(X_train["SalePrice"])  # remember to cancel out the skew correct after prediction by using np.expm1(X_train["SalePrice"])
+        X_train["SalePrice"] = np.log1p(X_train["SalePrice"])  # FIXME:remember to cancel out the skew correct after prediction by using np.expm1(X_train["SalePrice"])
 
         # # Check the new distribution
         # sns.distplot(X_train['SalePrice'], fit=norm);
