@@ -274,7 +274,7 @@ if __name__ == "__main__":
 
         # hyper-parameters
         n_bootstraps = 400
-        k_features = 100
+        k_features = 244
 
         abserrs = np.zeros(k_features)
         for numfeat in range(1, k_features+1):
@@ -283,18 +283,17 @@ if __name__ == "__main__":
             X_val, X_remain, y_val, y_remain = train_test_split(X, y, test_size=0.25)
 
             # Create an SelectKBest object to select features with two best ANOVA F-Values
-            fvalue_selector = SelectKBest(f_classif, k=numfeat)
+            selector = SelectKBest(f_classif, k=numfeat)
 
             # Apply the SelectKBest object to the feat. and target
-            best_X = fvalue_selector.fit_transform(X_val, y_val)
-            # # Show results
-            # print('Original number of features:', X.shape[1])
-            # print('Reduced number of features:', best_X.shape[1])
-
-            X_train, X_test, y_train, y_test = train_test_split(best_X, y_val, test_size=0.3)
+            best_X = selector.fit_transform(X_val, y_val)
+            mask = selector.get_support()
+            new_features = X_val.columns[mask]
+            # Use the selected feature from validation set to now filter the X_remaining
+            X_remain = X_remain[new_features]
+            X_train, X_test, y_train, y_test = train_test_split(X_remain, y_remain, test_size=0.3)
         
             my_model = XGBRegressor()
-            # Add silent=True to avoid printing out updates with each cycle
             my_model.fit(X_train, y_train, verbose=False)
 
             # make predictions
