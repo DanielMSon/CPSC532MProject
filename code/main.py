@@ -1,8 +1,8 @@
 import argparse
 import numpy as np
 import pandas as pd
-from utils import standardize_dataset
-from sklearn.linear_model import Lasso
+from utils import standardize_dataset, evaluate_model
+from sklearn.linear_model import ElasticNet, Lasso, BayesianRidge, Ridge
 from sklearn.utils import resample
 from sklearn.model_selection import KFold
 from sklearn.linear_model import LinearRegression
@@ -14,6 +14,12 @@ from scipy.special import boxcox1p
 from scipy.stats import boxcox_normmax
 
 from sklearn.preprocessing import LabelEncoder
+
+import torch
+import torch.nn as nn
+import torch.optim as optim
+
+from models import NeuralNetRegressor
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -256,9 +262,36 @@ if __name__ == "__main__":
         for feature in label_name_list:
             print(feature)
 
+    elif question == "train_and_validate":
+        # read preprocessed data as pandas dataframe
+        df = pd.read_csv('../data/train_sig_features.csv')
+        feats = df.drop('SalePrice', axis=1, inplace=False).columns.values      # features
+        X = df.drop('SalePrice', axis=1, inplace=False).values
+        y = df['SalePrice'].values
 
+        n, d = np.shape(X)
 
+        # test Lasso model
+        # raise NotImplementedError
+        print("base model: Lasso (L2-loss with L1-reg)")
+        model = Lasso(alpha=1, random_state=2)
+        err_tr, err_va = evaluate_model(model, X, y, valid_size=0.1, verbose=True) # no cross validation
+        # err_tr, err_va = evaluate_model(model, X, y, cross_val=True, n_splits=10, verbose=True)
 
+        # ElasticNet
+        print("base model: ElasticNet (L2-loss with L1-reg and L2-reg)")
+        model = ElasticNet(alpha=1, l1_ratio=0.5, random_state=2)
+        err_tr, err_va = evaluate_model(model, X, y, valid_size=0.1, verbose=True) # no cross validation
+        # err_tr, err_va = evaluate_model(model, X, y, cross_val=True, n_splits=10, verbose=True)
 
+        # Ridge
+        print("base model: Ridge (L2-loss with L2_reg)")
+        model = Ridge(alpha=1, random_state=2)
+        err_tr, err_va = evaluate_model(model, X, y, valid_size=0.1, verbose=True) # no cross validation
+        # err_tr, err_va = evaluate_model(model, X, y, cross_val=True, n_splits=10, verbose=True)
+
+        # Neural Net
+        print("base model: Neural Net")
+        model = NeuralNetRegressor(d)
 
 

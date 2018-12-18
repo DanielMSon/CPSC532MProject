@@ -33,5 +33,14 @@ The following base models will be implemented individually and at the end will b
     |`alpha` |$\alpha$|
 
 4. sklearn.ensemble.GradientBoostingRegressor
-    ensemble of weak estimators ([regression trees](./doc/regression_tree.pdf))
-5. 
+    ensemble of weak estimators [Gradient Bosting](https://www.youtube.com/watch?v=sRktKszFmSk)
+    ([regression trees](./doc/regression_tree.pdf))
+5. xgboost.XGBRegressor
+    ie. regularized gradient boosting
+
+6. lightGBM
+    something similar to XGB but varies in detailed implementation and results in faster training while achieving similar performace
+
+### Base models to add:
+1. knn regresion?
+2. neural net regression?
