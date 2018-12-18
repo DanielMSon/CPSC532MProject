@@ -1,6 +1,8 @@
 import argparse
 import numpy as np
 import pandas as pd
+import os
+
 from utils import standardize_dataset
 from sklearn.linear_model import Lasso
 from sklearn.utils import resample
@@ -272,9 +274,10 @@ if __name__ == "__main__":
 
         # hyper-parameters
         n_bootstraps = 400
-        k_features = 200
+        k_features = 100
 
-        for numfeat in range(1, k_features):
+        abserrs = np.zeros(k_features)
+        for numfeat in range(1, k_features+1):
             # Create Validation
             X, y, _, _ = standardize_dataset(data, data)
             X_val, X_remain, y_val, y_remain = train_test_split(X, y, test_size=0.25)
@@ -298,7 +301,17 @@ if __name__ == "__main__":
             predictions = my_model.predict(X_test)
             meanabserr = mean_absolute_error(predictions, y_test)
             print(str(numfeat) + ": Mean Absolute Error : " + str(meanabserr))
+            abserrs[numfeat-1] = meanabserr
+        
+        plt.title("The effect of number of features of ANOVA on testing/training error")
+        plt.plot(np.arange(1,numfeat+1), abserrs, label="Abs. error")
+        plt.xlabel("# of Features")
+        plt.ylabel("Mean Abs. Error")
+        plt.legend()
 
+        fname = os.path.join("..", "figs", "ANOVA_validation_plot.pdf")
+        plt.savefig(fname)
+        print("\nFigure saved as '%s'" % fname)   
 
 
     
