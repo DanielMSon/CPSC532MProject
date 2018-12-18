@@ -13,7 +13,16 @@ from scipy.stats import norm, skew
 from scipy.special import boxcox1p
 from scipy.stats import boxcox_normmax
 
-from sklearn.preprocessing import LabelEncoder
+
+##ANOVA
+from sklearn.feature_selection import SelectKBest
+from sklearn.feature_selection import f_classif
+
+#XGBoost
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import Imputer
+from xgboost import XGBRegressor
+from sklearn.metrics import mean_absolute_error
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -255,10 +264,63 @@ if __name__ == "__main__":
         print("These are the features kept: ")
         for feature in label_name_list:
             print(feature)
+            
+    elif question == "anova":
+        import warnings
+        warnings.filterwarnings("ignore")
+        data = pd.read_csv('../data/train_preprocessed.csv')
+
+        # hyper-parameters
+        n_bootstraps = 400
+        k_features = 200
+
+        for numfeat in range(1, k_features):
+            # Create Validation
+            X, y, _, _ = standardize_dataset(data, data)
+            X_val, X_remain, y_val, y_remain = train_test_split(X, y, test_size=0.25)
+
+            # Create an SelectKBest object to select features with two best ANOVA F-Values
+            fvalue_selector = SelectKBest(f_classif, k=numfeat)
+
+            # Apply the SelectKBest object to the feat. and target
+            best_X = fvalue_selector.fit_transform(X_val, y_val)
+            # # Show results
+            # print('Original number of features:', X.shape[1])
+            # print('Reduced number of features:', best_X.shape[1])
+
+            X_train, X_test, y_train, y_test = train_test_split(best_X, y_val, test_size=0.3)
+        
+            my_model = XGBRegressor()
+            # Add silent=True to avoid printing out updates with each cycle
+            my_model.fit(X_train, y_train, verbose=False)
+
+            # make predictions
+            predictions = my_model.predict(X_test)
+            meanabserr = mean_absolute_error(predictions, y_test)
+            print(str(numfeat) + ": Mean Absolute Error : " + str(meanabserr))
 
 
 
+    
+    elif question == "xgboost":
+        ## TODO replace with custom code for model
+        data = pd.read_csv('../data/train_preprocessed.csv')
+        data.dropna(axis=0, subset=['SalePrice'], inplace=True)
+        y = data.SalePrice
+        X = data.drop(['SalePrice'], axis=1).select_dtypes(exclude=['object'])
+        train_X, test_X, train_y, test_y = train_test_split(X.as_matrix(), y.as_matrix(), test_size=0.25)
 
+        my_imputer = Imputer()
+        train_X = my_imputer.fit_transform(train_X)
+        test_X = my_imputer.transform(test_X)
 
+        my_model = XGBRegressor()
+        # Add silent=True to avoid printing out updates with each cycle
+        my_model.fit(train_X, train_y, verbose=False)
+
+        # make predictions
+        predictions = my_model.predict(test_X)
+        meanabserr = mean_absolute_error(predictions, test_y)
+        print("Mean Absolute Error : " + str(meanabserr))
 
 
