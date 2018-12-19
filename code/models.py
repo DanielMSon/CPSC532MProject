@@ -7,7 +7,7 @@ from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import RobustScaler
 from sklearn.utils import shuffle
 
-# use pytorch to NN implementation
+# use pytorch to implement neural network
 try:
     import torch
     import torch.nn as nn 
@@ -35,7 +35,7 @@ class Net(nn.Module):
         # self.input_feats = input_feats
 
         # input layer, 1 hidden layer, output layer
-        l1 = 10
+        l1 = 15
         l2 = 10
 
         self.fc1 = nn.Linear(num_features, l1)
@@ -59,7 +59,9 @@ class Net(nn.Module):
         return x
 
 class NeuralNetRegressor():
-    def __init__(self, num_features, lr=0.01, momentum=0.9, batch_size=4, shuffle_data=True, num_workers=2, gpu=False, verbose=False):
+    def __init__(self, num_features, lr=0.01, momentum=0.9, 
+                batch_size=4, shuffle_data=True, num_workers=2, 
+                gpu=False, verbose=False, epochs=2):
         """ constructor for NN regressor
         
         Arguments:
@@ -72,6 +74,8 @@ class NeuralNetRegressor():
             shuffle_data {bool} -- shuffle data in SGD (default: {True})
             num_workers {int} -- how many subprocess used to dataloading (default: {2})
             gpu {bool} -- whether to use gpu for training (default: {False})
+            verbose {bool} -- whether to print out running loss (default: {False})
+            epochs {int} -- how many epochs the training runs (defatult: {2})
         """
 
         # self.num_features = num_features
@@ -83,11 +87,12 @@ class NeuralNetRegressor():
         self.num_workers = num_workers
         self.gpu = gpu
         self.verbose = verbose
+        self.epochs = epochs
 
         if torch.cuda.is_available():
             self.device = torch.device('cuda')
 
-    def fit(self, X_train, y_train, epochs=2):
+    def fit(self, X_train, y_train):
         """traing neural network
         
         Arguments:
@@ -121,7 +126,7 @@ class NeuralNetRegressor():
         self.optimizer = optim.SGD(self.net.parameters(), lr=self.lr, momentum=self.momentum)
         
         # training
-        for epoch in range(epochs):
+        for epoch in range(self.epochs):
             
             running_loss = 0.0
             for i, data in enumerate(train_loader, 0):
