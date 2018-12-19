@@ -110,7 +110,7 @@ def evaluate_model(model, X, y, cross_val=False, valid_size=0.1, n_splits=10, sh
     return err_tr, err_va
 
 def _evaluate(model, X_train, y_train, X_valid=None, y_valid=None):
-    """ helper function for evaluate model
+    """ helper function for evaluate_model()
     
     Arguments:
         model {model object} -- regression model

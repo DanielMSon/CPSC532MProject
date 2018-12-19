@@ -35,15 +35,15 @@ class Net(nn.Module):
         # self.input_feats = input_feats
 
         # input layer, 1 hidden layer, output layer
-        l1 = 15
-        l2 = 10
+        l1 = 37
+        l2 = 5  
 
         self.fc1 = nn.Linear(num_features, l1)
         self.fc2 = nn.Linear(l1, l2)
-        self.fc3 = nn.Linear(l2, 1)
+        self.fc3 = nn.Linear(l2, 1)     # keep the last layer before output helps reducing the occurace of NaN
 
     def forward(self, x):
-        """feedforward 
+        """ feedforward 
         
         Arguments:
             x {tensor} -- input
@@ -155,8 +155,6 @@ class NeuralNetRegressor():
                     print('[%d, %5d] loss: %.3f' %
                         (epoch + 1, i + 1, running_loss / 2000))
                     running_loss = 0.0
-
-                    print()
         
         print("Finished training")
 
