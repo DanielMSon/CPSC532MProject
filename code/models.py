@@ -127,15 +127,11 @@ class NeuralNetRegressor():
             shuffle=self.shuffle_data, num_workers=self.num_workers
         )
 
-        # if torch.cuda.is_available() and self.gpu == True:
-        #     device = torch.device('cuda')
-        
-
         # predict without tracking gradient
         with torch.no_grad():
             for data in test_loader:
                 [x_te] = data 
-                # TODO: transfer net to GPU if available
+
                 if self.gpu == True:
                     try:
                         x_te = x_te.to(self.device)
