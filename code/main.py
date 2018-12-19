@@ -21,7 +21,7 @@ from sklearn.preprocessing import LabelEncoder
 
 ##ANOVA
 from sklearn.feature_selection import SelectKBest
-from sklearn.feature_selection import f_classif
+from sklearn.feature_selection import f_classif, f_regression, mutual_info_regression
 from sklearn import preprocessing
 
 #XGBoost
@@ -294,7 +294,7 @@ if __name__ == "__main__":
             X_val, X_remain, y_val, y_remain = train_test_split(X, y, test_size=0.50)
 
             # Create an SelectKBest object to select features with two best ANOVA F-Values
-            selector = SelectKBest(f_classif, k=numfeat)
+            selector = SelectKBest(f_regression, k=numfeat)
 
             # Apply the SelectKBest object to the feat. and target
             best_X = selector.fit_transform(X_val, y_val)
@@ -304,7 +304,7 @@ if __name__ == "__main__":
             X_remain = X_remain[new_features]
             # print(X_remain.shape)
             feature_names = list(X_remain.columns.values)
-            # print(feature_names)
+            print(feature_names)
             X_train, X_test, y_train, y_test = train_test_split(X_remain, y_remain, test_size=0.3)
         
             my_model = XGBRegressor()
