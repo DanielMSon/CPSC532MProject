@@ -346,7 +346,7 @@ if __name__ == "__main__":
         print("Mean Absolute Error : " + str(meanabserr))
 
 
-    elif question == "train_and_validate":
+    elif question == "base_models":
         # read preprocessed data as pandas dataframe
         df = pd.read_csv('../data/train_sig_features.csv')
         feats = df.drop('SalePrice', axis=1, inplace=False).columns.values      # features
@@ -387,6 +387,7 @@ if __name__ == "__main__":
         # err_tr, err_va = evaluate_model(model, X, y, cross_val=True, n_splits=10, verbose=True)
 
         # Neural Net
+        # FIXME: sometimes would produce NaN as results. 
         print("base model: Neural Net")
         model = NeuralNetRegressor(d, gpu=True)
         err_tr, err_va = evaluate_model(model, X, y, valid_size=0.1, verbose=True, random_state=5) # no cross validation
