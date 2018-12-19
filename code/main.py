@@ -19,12 +19,25 @@ from scipy.stats import boxcox_normmax
 ##ANOVA
 from sklearn.feature_selection import SelectKBest
 from sklearn.feature_selection import f_classif
+from sklearn import preprocessing
 
 #XGBoost
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import Imputer
 from xgboost import XGBRegressor
 from sklearn.metrics import mean_absolute_error
+
+#ElasticNet
+from sklearn.linear_model import Ridge, ElasticNet
+
+def normalize(df):
+    result = df.copy()
+    for feature_name in df.columns:
+        max_value = df[feature_name].max()
+        min_value = df[feature_name].min()
+        result[feature_name] = (df[feature_name] - min_value) / (max_value - min_value)
+    return result
+            
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -274,23 +287,27 @@ if __name__ == "__main__":
 
         # hyper-parameters
         n_bootstraps = 400
-        k_features = 244
+        k_features = 100
 
         abserrs = np.zeros(k_features)
         for numfeat in range(1, k_features+1):
             # Create Validation
+            # leave it as None initially to explore the variance first, then change to the choosen number from explained_variance
             X, y, _, _ = standardize_dataset(data, data)
-            X_val, X_remain, y_val, y_remain = train_test_split(X, y, test_size=0.25)
+            X_val, X_remain, y_val, y_remain = train_test_split(X, y, test_size=0.50)
 
             # Create an SelectKBest object to select features with two best ANOVA F-Values
             selector = SelectKBest(f_classif, k=numfeat)
 
             # Apply the SelectKBest object to the feat. and target
             best_X = selector.fit_transform(X_val, y_val)
-            mask = selector.get_support()
+            mask = selector.get_support(indices=True)
             new_features = X_val.columns[mask]
             # Use the selected feature from validation set to now filter the X_remaining
             X_remain = X_remain[new_features]
+            # print(X_remain.shape)
+            feature_names = list(X_remain.columns.values)
+            # print(feature_names)
             X_train, X_test, y_train, y_test = train_test_split(X_remain, y_remain, test_size=0.3)
         
             my_model = XGBRegressor()
@@ -308,31 +325,91 @@ if __name__ == "__main__":
         plt.ylabel("Mean Abs. Error")
         plt.legend()
 
-        fname = os.path.join("..", "figs", "ANOVA_validation_plot.pdf")
+        fname = os.path.join("..", "figs", "ANOVA_validation_plot.png")
         plt.savefig(fname)
         print("\nFigure saved as '%s'" % fname)   
 
+        # compare with original model with all original features
+        original_model = XGBRegressor()
+        original_model.fit(X, y, verbose=False)
 
-    
-    elif question == "xgboost":
-        ## TODO replace with custom code for model
+        predictions = original_model.predict(X)
+        meanabserr = mean_absolute_error(predictions, y)
+        print("Original: Mean Absolute Error : " + str(meanabserr))
+
+    elif question == "compare_selected":
         data = pd.read_csv('../data/train_preprocessed.csv')
-        data.dropna(axis=0, subset=['SalePrice'], inplace=True)
-        y = data.SalePrice
-        X = data.drop(['SalePrice'], axis=1).select_dtypes(exclude=['object'])
-        train_X, test_X, train_y, test_y = train_test_split(X.as_matrix(), y.as_matrix(), test_size=0.25)
-
-        my_imputer = Imputer()
-        train_X = my_imputer.fit_transform(train_X)
-        test_X = my_imputer.transform(test_X)
-
+        X, y, _, _ = standardize_dataset(data, data)
+        # make predictions using some model
         my_model = XGBRegressor()
-        # Add silent=True to avoid printing out updates with each cycle
-        my_model.fit(train_X, train_y, verbose=False)
+        my_model.fit(X, y, verbose=False)
 
-        # make predictions
-        predictions = my_model.predict(test_X)
-        meanabserr = mean_absolute_error(predictions, test_y)
-        print("Mean Absolute Error : " + str(meanabserr))
+        predictions = my_model.predict(X)
+        meanabserr = mean_absolute_error(predictions, y)
+        print("Original Data: Mean Absolute Error : " + str(meanabserr))
+
+        data = pd.read_csv('../data/train_sig_features.csv')
+        X_selected, y_selected, _, _ = standardize_dataset(data, data)
+        
+        # make predictions using some model
+        my_model = XGBRegressor()
+        my_model.fit(X_selected, y_selected, verbose=False)
+        predictions = my_model.predict(X_selected)
+        meanabserr = mean_absolute_error(predictions, y_selected)
+        print("Selected Features: Mean Absolute Error : " + str(meanabserr))
+
+    elif question == "xgbregressor":
+        data = pd.read_csv('../data/train_preprocessed.csv')
+        X, y, _, _ = standardize_dataset(data, data)
+        X_val, X_remain, y_val, y_remain = train_test_split(X, y, test_size=0.50)
+
+        #Rank features on importance using xgbregressor
+        xgb = XGBRegressor()
+        xgb.fit(X_val, y_val)
+        feature_ranking = pd.DataFrame(xgb.feature_importances_ ,columns = ['Importance'],index = X_val.columns)
+        feature_ranking = feature_ranking.sort_values(['Importance'], ascending = False)
+        
+        #Hyper parameter test of num features
+        k_features = 244
+        abserrs = np.zeros(k_features)
+        for numfeat in range(1, k_features+1):        
+            selected_features = feature_ranking.index.values[1:numfeat]
+            # print(selected_features)
+
+            #generate new dataset on the remaining data
+            X_remain_formodel = X_remain[selected_features]
+
+            # # make predictions using remaining dataset
+            X_train, X_test, y_train, y_test = train_test_split(X_remain_formodel, y_remain, test_size=0.50)
+
+            reduced_model = XGBRegressor()
+            reduced_model.fit(X_test, y_test, verbose=False)
+
+            predictions = reduced_model.predict(X_test)
+            meanabserr = mean_absolute_error(predictions, y_test)
+            print(str(numfeat) + ": Selected Features: Mean Absolute Error : " + str(meanabserr))
+            abserrs[numfeat-1] = meanabserr
+
+        plt.title("The effect of number of features of ANOVA on testing/training error")
+        plt.plot(np.arange(1,numfeat+1), abserrs, label="Abs. error")
+        plt.xlabel("# of Features")
+        plt.ylabel("Mean Abs. Error")
+        plt.legend()
+
+        fname = os.path.join("..", "figs", "XGBRegressor_validation_plot.png")
+        plt.savefig(fname)
+        print("\nFigure saved as '%s'" % fname)   
+
+        # compare with original model with all original features
+        original_model = XGBRegressor()
+        original_model.fit(X, y, verbose=False)
+
+        predictions = original_model.predict(X)
+        meanabserr = mean_absolute_error(predictions, y)
+        print("Original: Mean Absolute Error : " + str(meanabserr))
+
+
+
+
 
 
