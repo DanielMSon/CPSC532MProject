@@ -25,6 +25,11 @@ import scipy.stats as stats
 from scipy.stats import chi2_contingency
 
 class Net(nn.Module):
+    """ 
+    A simple regression neural network. The hyperparameters are arbitraty as of now.
+    TODO: tune hyper parameter
+    """
+
     def __init__(self, num_features):
         super(Net, self).__init__()
         # self.input_feats = input_feats
@@ -38,6 +43,15 @@ class Net(nn.Module):
         self.fc3 = nn.Linear(l2, 1)
 
     def forward(self, x):
+        """feedforward 
+        
+        Arguments:
+            x {tensor} -- input
+        
+        Returns:
+            {tensor} -- output
+        """
+
         x = F.relu(self.fc1(x))
         x = F.relu(self.fc2(x))
         x = self.fc3(x)
@@ -45,7 +59,21 @@ class Net(nn.Module):
         return x
 
 class NeuralNetRegressor():
-    def __init__(self, num_features, lr=0.01, momentum=0.9, batch_size=4, shuffle_data=False, num_workers=2, gpu=False):
+    def __init__(self, num_features, lr=0.01, momentum=0.9, batch_size=4, shuffle_data=True, num_workers=2, gpu=False, verbose=False):
+        """ constructor for NN regressor
+        
+        Arguments:
+            num_features {int} -- d, the number of features for an example
+        
+        Keyword Arguments:
+            lr {float} -- learning rate (default: {0.01})
+            momentum {float} -- momentum (default: {0.9})
+            batch_size {int} -- mini-batch size. Torch will always go with a batch when SGD is used (default: {4})
+            shuffle_data {bool} -- shuffle data in SGD (default: {True})
+            num_workers {int} -- how many subprocess used to dataloading (default: {2})
+            gpu {bool} -- whether to use gpu for training (default: {False})
+        """
+
         # self.num_features = num_features
         self.net = Net(num_features)
         self.lr = lr    # learning rate
@@ -54,11 +82,22 @@ class NeuralNetRegressor():
         self.shuffle_data = shuffle_data
         self.num_workers = num_workers
         self.gpu = gpu
+        self.verbose = verbose
 
         if torch.cuda.is_available():
             self.device = torch.device('cuda')
 
-    def fit(self, X_train, y_train, epochs=10):
+    def fit(self, X_train, y_train, epochs=2):
+        """traing neural network
+        
+        Arguments:
+            X_train {ndarray} -- X training
+            y_train {ndarray} -- y training
+        
+        Keyword Arguments:
+            epochs {int} -- how many epochs (default: {2})
+        """
+
         # convert to tensors
         X_train = torch.from_numpy(X_train).float() 
         y_train = torch.from_numpy(y_train).unsqueeze(1).float()
@@ -70,7 +109,7 @@ class NeuralNetRegressor():
             shuffle=self.shuffle_data, num_workers=self.num_workers
         )
         
-        # TODO: transfer net to GPU if available
+        # transfer net to GPU if available
         if self.gpu == True:
             try:
                 self.net.to(self.device)
@@ -87,6 +126,8 @@ class NeuralNetRegressor():
             running_loss = 0.0
             for i, data in enumerate(train_loader, 0):
                 X_tr, y_tr = data
+                
+                # transfer to GPU if available
                 if self.gpu == True:
                     try:
                         X_tr, y_tr = X_tr.to(self.device), y_tr.to(self.device)
@@ -105,14 +146,25 @@ class NeuralNetRegressor():
                 # print stat
                 running_loss += self.loss.item()
 
-                if i % 2000 == 1999:
+                if self.verbose == True and i % 200 == 199:
                     print('[%d, %5d] loss: %.3f' %
                         (epoch + 1, i + 1, running_loss / 2000))
                     running_loss = 0.0
+
+                    print()
         
         print("Finished training")
 
     def predict(self, X):
+        """predict with trained NN
+        
+        Arguments:
+            X {ndarray} -- X test
+        
+        Returns:
+            yhats {ndarray} -- predictions
+        """
+
         yhats = torch.tensor([])
         if self.gpu == True:
             try:
@@ -196,5 +248,3 @@ if __name__ == "__main__":
     testColumns = ['Embarked','Cabin','Pclass','Age','Name','dummyCat']
     for var in testColumns:
         cT.TestIndependence(colX=var,colY="Survived" )  
-
-
