@@ -286,8 +286,7 @@ if __name__ == "__main__":
         data = pd.read_csv('../data/train_preprocessed.csv')
 
         # hyper-parameters
-        n_bootstraps = 400
-        k_features = 100
+        k_features = 244
 
         abserrs = np.zeros(k_features)
         for numfeat in range(1, k_features+1):
@@ -336,27 +335,6 @@ if __name__ == "__main__":
         predictions = original_model.predict(X)
         meanabserr = mean_absolute_error(predictions, y)
         print("Original: Mean Absolute Error : " + str(meanabserr))
-
-    elif question == "compare_selected":
-        data = pd.read_csv('../data/train_preprocessed.csv')
-        X, y, _, _ = standardize_dataset(data, data)
-        # make predictions using some model
-        my_model = XGBRegressor()
-        my_model.fit(X, y, verbose=False)
-
-        predictions = my_model.predict(X)
-        meanabserr = mean_absolute_error(predictions, y)
-        print("Original Data: Mean Absolute Error : " + str(meanabserr))
-
-        data = pd.read_csv('../data/train_sig_features.csv')
-        X_selected, y_selected, _, _ = standardize_dataset(data, data)
-        
-        # make predictions using some model
-        my_model = XGBRegressor()
-        my_model.fit(X_selected, y_selected, verbose=False)
-        predictions = my_model.predict(X_selected)
-        meanabserr = mean_absolute_error(predictions, y_selected)
-        print("Selected Features: Mean Absolute Error : " + str(meanabserr))
 
     elif question == "xgbregressor":
         data = pd.read_csv('../data/train_preprocessed.csv')
