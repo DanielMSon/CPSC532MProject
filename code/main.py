@@ -1,11 +1,15 @@
 import argparse
 import numpy as np
 import pandas as pd
+import os
+
 from utils import standardize_dataset, evaluate_model
 from sklearn.linear_model import ElasticNet, Lasso, BayesianRidge, Ridge
 from sklearn.utils import resample
 from sklearn.model_selection import KFold
 from sklearn.linear_model import LinearRegression
+from sklearn.neighbors import KNeighborsRegressor
+
 import matplotlib.pyplot as plt  # Matlab-style plotting
 import seaborn as sns
 from scipy import stats
@@ -15,11 +19,22 @@ from scipy.stats import boxcox_normmax
 
 from sklearn.preprocessing import LabelEncoder
 
+##ANOVA
+from sklearn.feature_selection import SelectKBest
+from sklearn.feature_selection import f_classif
+
+#XGBoost
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import Imputer
+from xgboost import XGBRegressor
+from sklearn.metrics import mean_absolute_error
+
 import torch
 import torch.nn as nn
 import torch.optim as optim
 
 from models import NeuralNetRegressor
+import lightgbm as lgb
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -261,6 +276,75 @@ if __name__ == "__main__":
         print("These are the features kept: ")
         for feature in label_name_list:
             print(feature)
+            
+    elif question == "anova":
+        import warnings
+        warnings.filterwarnings("ignore")
+        data = pd.read_csv('../data/train_preprocessed.csv')
+
+        # hyper-parameters
+        n_bootstraps = 400
+        k_features = 244
+
+        abserrs = np.zeros(k_features)
+        for numfeat in range(1, k_features+1):
+            # Create Validation
+            X, y, _, _ = standardize_dataset(data, data)
+            X_val, X_remain, y_val, y_remain = train_test_split(X, y, test_size=0.25)
+
+            # Create an SelectKBest object to select features with two best ANOVA F-Values
+            selector = SelectKBest(f_classif, k=numfeat)
+
+            # Apply the SelectKBest object to the feat. and target
+            best_X = selector.fit_transform(X_val, y_val)
+            mask = selector.get_support()
+            new_features = X_val.columns[mask]
+            # Use the selected feature from validation set to now filter the X_remaining
+            X_remain = X_remain[new_features]
+            X_train, X_test, y_train, y_test = train_test_split(X_remain, y_remain, test_size=0.3)
+        
+            my_model = XGBRegressor()
+            my_model.fit(X_train, y_train, verbose=False)
+
+            # make predictions
+            predictions = my_model.predict(X_test)
+            meanabserr = mean_absolute_error(predictions, y_test)
+            print(str(numfeat) + ": Mean Absolute Error : " + str(meanabserr))
+            abserrs[numfeat-1] = meanabserr
+        
+        plt.title("The effect of number of features of ANOVA on testing/training error")
+        plt.plot(np.arange(1,numfeat+1), abserrs, label="Abs. error")
+        plt.xlabel("# of Features")
+        plt.ylabel("Mean Abs. Error")
+        plt.legend()
+
+        fname = os.path.join("..", "figs", "ANOVA_validation_plot.pdf")
+        plt.savefig(fname)
+        print("\nFigure saved as '%s'" % fname)   
+
+
+    
+    elif question == "xgboost":
+        ## TODO replace with custom code for model
+        data = pd.read_csv('../data/train_preprocessed.csv')
+        data.dropna(axis=0, subset=['SalePrice'], inplace=True)
+        y = data.SalePrice
+        X = data.drop(['SalePrice'], axis=1).select_dtypes(exclude=['object'])
+        train_X, test_X, train_y, test_y = train_test_split(X.as_matrix(), y.as_matrix(), test_size=0.25)
+
+        my_imputer = Imputer()
+        train_X = my_imputer.fit_transform(train_X)
+        test_X = my_imputer.transform(test_X)
+
+        my_model = XGBRegressor()
+        # Add silent=True to avoid printing out updates with each cycle
+        my_model.fit(train_X, train_y, verbose=False)
+
+        # make predictions
+        predictions = my_model.predict(test_X)
+        meanabserr = mean_absolute_error(predictions, test_y)
+        print("Mean Absolute Error : " + str(meanabserr))
+
 
     elif question == "train_and_validate":
         # read preprocessed data as pandas dataframe
@@ -290,8 +374,28 @@ if __name__ == "__main__":
         err_tr, err_va = evaluate_model(model, X, y, valid_size=0.1, verbose=True) # no cross validation
         # err_tr, err_va = evaluate_model(model, X, y, cross_val=True, n_splits=10, verbose=True)
 
+        # KNN regression
+        print("base model: KNN regression")
+        model = KNeighborsRegressor(n_neighbors=5)
+        err_tr, err_va = evaluate_model(model, X, y, valid_size=0.1, verbose=True) # no cross validation
+        # err_tr, err_va = evaluate_model(model, X, y, cross_val=True, n_splits=10, verbose=True)
+
+        # lightGBM
+        print("base model: lightGBM")
+        model = lgb.LGBMRegressor(objective='regression', num_leaves=5, learning_rate=0.05)
+        err_tr, err_va = evaluate_model(model, X, y, valid_size=0.1, verbose=True) # no cross validation
+        # err_tr, err_va = evaluate_model(model, X, y, cross_val=True, n_splits=10, verbose=True)
+
         # Neural Net
         print("base model: Neural Net")
-        model = NeuralNetRegressor(d)
+        model = NeuralNetRegressor(d, gpu=True)
+        err_tr, err_va = evaluate_model(model, X, y, valid_size=0.1, verbose=True, random_state=5) # no cross validation
+        # err_tr, err_va = evaluate_model(model, X, y, cross_val=True, n_splits=10, verbose=True)
+
+
+
+
+
+
 
 

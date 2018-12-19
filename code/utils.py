@@ -42,7 +42,7 @@ def standardize_dataset(data, data_valid, include_y_int=True):
 
     return X, y, X_valid, y_valid
 
-def evaluate_model(model, X, y, cross_val=False, valid_size=0.1, n_splits=10, shuffle_data=True, random_state=2, verbose=False):
+def evaluate_model(model, X, y, cross_val=False, valid_size=0.1, n_splits=10, shuffle_data=True, random_state=10, verbose=False):
     """ Evaluate model by splitting dataset into training and validation 
     sets and report both training and validation errors
     
