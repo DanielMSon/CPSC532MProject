@@ -3,11 +3,13 @@ import numpy as np
 import pandas as pd
 import os
 
-from utils import standardize_dataset
-from sklearn.linear_model import Lasso
+from utils import standardize_dataset, evaluate_model
+from sklearn.linear_model import ElasticNet, Lasso, BayesianRidge, Ridge
 from sklearn.utils import resample
 from sklearn.model_selection import KFold
 from sklearn.linear_model import LinearRegression
+from sklearn.neighbors import KNeighborsRegressor
+
 import matplotlib.pyplot as plt  # Matlab-style plotting
 import seaborn as sns
 from scipy import stats
@@ -15,6 +17,7 @@ from scipy.stats import norm, skew
 from scipy.special import boxcox1p
 from scipy.stats import boxcox_normmax
 
+from sklearn.preprocessing import LabelEncoder
 
 ##ANOVA
 from sklearn.feature_selection import SelectKBest
@@ -27,17 +30,12 @@ from sklearn.preprocessing import Imputer
 from xgboost import XGBRegressor
 from sklearn.metrics import mean_absolute_error
 
-#ElasticNet
-from sklearn.linear_model import Ridge, ElasticNet
+import torch
+import torch.nn as nn
+import torch.optim as optim
 
-def normalize(df):
-    result = df.copy()
-    for feature_name in df.columns:
-        max_value = df[feature_name].max()
-        min_value = df[feature_name].min()
-        result[feature_name] = (df[feature_name] - min_value) / (max_value - min_value)
-    return result
-            
+from models import NeuralNetRegressor
+import lightgbm as lgb
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -136,7 +134,7 @@ if __name__ == "__main__":
         # feature.
         # region SKEW_CORRECTION
         # Correct target skew by using log(1+x)
-        X_train["SalePrice"] = np.log1p(X_train["SalePrice"])  # remember to cancel out the skew correct after prediction by using np.expm1(X_train["SalePrice"])
+        X_train["SalePrice"] = np.log1p(X_train["SalePrice"])  # FIXME:remember to cancel out the skew correct after prediction by using np.expm1(X_train["SalePrice"])
 
         # # Check the new distribution
         # sns.distplot(X_train['SalePrice'], fit=norm);
@@ -336,6 +334,7 @@ if __name__ == "__main__":
         meanabserr = mean_absolute_error(predictions, y)
         print("Original: Mean Absolute Error : " + str(meanabserr))
 
+
     elif question == "xgbregressor":
         data = pd.read_csv('../data/train_preprocessed.csv')
         X, y, _, _ = standardize_dataset(data, data)
@@ -385,6 +384,56 @@ if __name__ == "__main__":
         predictions = original_model.predict(X)
         meanabserr = mean_absolute_error(predictions, y)
         print("Original: Mean Absolute Error : " + str(meanabserr))
+
+
+    elif question == "base_models":
+        # read preprocessed data as pandas dataframe
+        df = pd.read_csv('../data/train_sig_features.csv')
+        feats = df.drop('SalePrice', axis=1, inplace=False).columns.values      # features
+        X = df.drop('SalePrice', axis=1, inplace=False).values
+        y = df['SalePrice'].values
+
+        n, d = np.shape(X)
+
+        ## base models
+        # test Lasso model
+        print("base model: Lasso (L2-loss with L1-reg)")
+        model = Lasso(alpha=1, random_state=2)
+        err_tr, err_va = evaluate_model(model, X, y, valid_size=0.1, verbose=True) # no cross validation
+        # err_tr, err_va = evaluate_model(model, X, y, cross_val=True, n_splits=10, verbose=True)
+
+        # ElasticNet
+        print("base model: ElasticNet (L2-loss with L1-reg and L2-reg)")
+        model = ElasticNet(alpha=1, l1_ratio=0.5, random_state=2)
+        err_tr, err_va = evaluate_model(model, X, y, valid_size=0.1, verbose=True) # no cross validation
+        # err_tr, err_va = evaluate_model(model, X, y, cross_val=True, n_splits=10, verbose=True)
+
+        # Ridge
+        print("base model: Ridge (L2-loss with L2_reg)")
+        model = Ridge(alpha=1, random_state=2)
+        err_tr, err_va = evaluate_model(model, X, y, valid_size=0.1, verbose=True) # no cross validation
+        # err_tr, err_va = evaluate_model(model, X, y, cross_val=True, n_splits=10, verbose=True)
+
+        # KNN regression
+        print("base model: KNN regression")
+        model = KNeighborsRegressor(n_neighbors=5)
+        err_tr, err_va = evaluate_model(model, X, y, valid_size=0.1, verbose=True) # no cross validation
+        # err_tr, err_va = evaluate_model(model, X, y, cross_val=True, n_splits=10, verbose=True)
+
+        # lightGBM
+        print("base model: lightGBM")
+        model = lgb.LGBMRegressor(objective='regression', num_leaves=5, learning_rate=0.05)
+        err_tr, err_va = evaluate_model(model, X, y, valid_size=0.1, verbose=True) # no cross validation
+        # err_tr, err_va = evaluate_model(model, X, y, cross_val=True, n_splits=10, verbose=True)
+
+        # Neural Net
+        # FIXME: sometimes would produce NaN as results. 
+        print("base model: Neural Net")
+        model = NeuralNetRegressor(d, gpu=True)
+        err_tr, err_va = evaluate_model(model, X, y, valid_size=0.1, verbose=True, random_state=5) # no cross validation
+        # err_tr, err_va = evaluate_model(model, X, y, cross_val=True, n_splits=10, verbose=True)
+
+
 
 
 
