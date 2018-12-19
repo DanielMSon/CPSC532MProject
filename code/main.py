@@ -277,8 +277,60 @@ if __name__ == "__main__":
         print("These are the features kept: ")
         for feature in label_name_list:
             print(feature)
-            
+    
+    
     elif question == "anova":
+        import warnings
+        warnings.filterwarnings("ignore")
+        data = pd.read_csv('../data/train_preprocessed.csv')
+
+        # hyper-parameters
+        numfeat = 50
+
+        # Create Validation
+        # leave it as None initially to explore the variance first, then change to the choosen number from explained_variance
+        X, y, _, _ = standardize_dataset(data, data)
+        X_val, X_remain, y_val, y_remain = train_test_split(X, y, test_size=0.50)
+
+        # Create an SelectKBest object to select features with two best ANOVA F-Values
+        selector = SelectKBest(f_regression, k=numfeat)
+
+        # Apply the SelectKBest object to the feat. and target
+        best_X = selector.fit_transform(X_val, y_val)
+        mask = selector.get_support(indices=True)
+        new_features = X_val.columns[mask]
+
+        # Use the selected feature from validation set to now filter the X_remaining
+        X_remain = X_remain[new_features]
+        feature_names = list(X_remain.columns.values)
+        print(feature_names)
+        X_train, X_test, y_train, y_test = train_test_split(X_remain, y_remain, test_size=0.3)
+        my_model = XGBRegressor()
+        my_model.fit(X_train, y_train, verbose=False)
+
+        # make predictions
+        predictions = my_model.predict(X_test)
+        meanabserr = mean_absolute_error(predictions, y_test)
+        print(str(numfeat) + ": Mean Absolute Error : " + str(meanabserr))
+
+        # compare with original model with all original features
+        original_model = XGBRegressor()
+        original_model.fit(X, y, verbose=False)
+        predictions = original_model.predict(X)
+        meanabserr = mean_absolute_error(predictions, y)
+        print("Original: Mean Absolute Error : " + str(meanabserr))
+
+        # save un-standardized data set with only significant features (this has X and y).
+        DFYint = pd.DataFrame(np.ones((data.shape[0], 1)), columns=['y-intercept'])
+        data = pd.concat([DFYint, data], axis=1)
+        SalePriceCol = data['SalePrice']
+        data.drop(labels=['SalePrice'], axis=1, inplace=True)
+        data = data[feature_names]
+        data.insert(0, 'SalePrice', SalePriceCol)
+        data.to_csv('../data/train_anova_features.csv', index=False)
+
+
+    elif question == "anovaplot":
         import warnings
         warnings.filterwarnings("ignore")
         data = pd.read_csv('../data/train_preprocessed.csv')
@@ -304,7 +356,7 @@ if __name__ == "__main__":
             X_remain = X_remain[new_features]
             # print(X_remain.shape)
             feature_names = list(X_remain.columns.values)
-            print(feature_names)
+            # print(feature_names)
             X_train, X_test, y_train, y_test = train_test_split(X_remain, y_remain, test_size=0.3)
         
             my_model = XGBRegressor()
@@ -336,6 +388,53 @@ if __name__ == "__main__":
 
 
     elif question == "xgbregressor":
+        data = pd.read_csv('../data/train_preprocessed.csv')
+        X, y, _, _ = standardize_dataset(data, data)
+        X_val, X_remain, y_val, y_remain = train_test_split(X, y, test_size=0.50)
+
+        #Rank features on importance using xgbregressor
+        xgb = XGBRegressor()
+        xgb.fit(X_val, y_val)
+        feature_ranking = pd.DataFrame(xgb.feature_importances_ ,columns = ['Importance'],index = X_val.columns)
+        feature_ranking = feature_ranking.sort_values(['Importance'], ascending = False)
+        
+        #Hyper parameter test of num features
+        numfeat = 50
+     
+        selected_features = feature_ranking.index.values[1:numfeat]
+        print(selected_features)
+
+        #generate new dataset on the remaining data
+        X_remain_formodel = X_remain[selected_features]
+
+        # # make predictions using remaining dataset
+        X_train, X_test, y_train, y_test = train_test_split(X_remain_formodel, y_remain, test_size=0.50)
+
+        reduced_model = XGBRegressor()
+        reduced_model.fit(X_test, y_test, verbose=False)
+
+        predictions = reduced_model.predict(X_test)
+        meanabserr = mean_absolute_error(predictions, y_test)
+        print(str(numfeat) + ": Selected Features: Mean Absolute Error : " + str(meanabserr))  
+
+        # compare with original model with all original features
+        original_model = XGBRegressor()
+        original_model.fit(X, y, verbose=False)
+        predictions = original_model.predict(X)
+        meanabserr = mean_absolute_error(predictions, y)
+        print("Original: Mean Absolute Error : " + str(meanabserr))
+
+        # save un-standardized data set with only significant features (this has X and y).
+        DFYint = pd.DataFrame(np.ones((data.shape[0], 1)), columns=['y-intercept'])
+        data = pd.concat([DFYint, data], axis=1)
+        SalePriceCol = data['SalePrice']
+        data.drop(labels=['SalePrice'], axis=1, inplace=True)
+        data = data[selected_features]
+        data.insert(0, 'SalePrice', SalePriceCol)
+        data.to_csv('../data/train_xgb_features.csv', index=False)
+
+
+    elif question == "xgbregressorplot":
         data = pd.read_csv('../data/train_preprocessed.csv')
         X, y, _, _ = standardize_dataset(data, data)
         X_val, X_remain, y_val, y_remain = train_test_split(X, y, test_size=0.50)
