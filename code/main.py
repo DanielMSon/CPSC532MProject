@@ -355,8 +355,8 @@ if __name__ == "__main__":
 
         n, d = np.shape(X)
 
+        ## base models
         # test Lasso model
-        # raise NotImplementedError
         print("base model: Lasso (L2-loss with L1-reg)")
         model = Lasso(alpha=1, random_state=2)
         err_tr, err_va = evaluate_model(model, X, y, valid_size=0.1, verbose=True) # no cross validation
