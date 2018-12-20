@@ -33,7 +33,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 
-from models import NeuralNetRegressor
+from models import NeuralNetRegressor, neuralNetHyperparamTuning, AveragingRegressor, StackingRegressor
 import lightgbm as lgb
 
 if __name__ == "__main__":
@@ -355,48 +355,157 @@ if __name__ == "__main__":
 
         n, d = np.shape(X)
 
+        err_type = 'rmsle'  # 'abs', 'squared', 'rmsle'
+
         ## base models
         # test Lasso model
         print("base model: Lasso (L2-loss with L1-reg)")
         model = Lasso(alpha=1, random_state=2)
-        err_tr, err_va = evaluate_model(model, X, y, valid_size=0.1, verbose=True) # no cross validation
-        # err_tr, err_va = evaluate_model(model, X, y, cross_val=True, n_splits=10, verbose=True)
+        err_tr, err_va = evaluate_model(model, X, y, valid_size=0.1, verbose=True, err_type=err_type) # no cross validation
+        # err_tr, err_va = evaluate_model(model, X, y, cross_val=True, n_splits=10, verbose=True, err_type)
 
         # ElasticNet
         print("base model: ElasticNet (L2-loss with L1-reg and L2-reg)")
         model = ElasticNet(alpha=1, l1_ratio=0.5, random_state=2)
-        err_tr, err_va = evaluate_model(model, X, y, valid_size=0.1, verbose=True) # no cross validation
-        # err_tr, err_va = evaluate_model(model, X, y, cross_val=True, n_splits=10, verbose=True)
+        err_tr, err_va = evaluate_model(model, X, y, valid_size=0.1, verbose=True, err_type=err_type) # no cross validation
+        # err_tr, err_va = evaluate_model(model, X, y, cross_val=True, n_splits=10, verbose=True, err_type=err_type)
 
         # Ridge
         print("base model: Ridge (L2-loss with L2_reg)")
         model = Ridge(alpha=1, random_state=2)
-        err_tr, err_va = evaluate_model(model, X, y, valid_size=0.1, verbose=True) # no cross validation
-        # err_tr, err_va = evaluate_model(model, X, y, cross_val=True, n_splits=10, verbose=True)
+        err_tr, err_va = evaluate_model(model, X, y, valid_size=0.1, verbose=True, err_type=err_type) # no cross validation
+        # err_tr, err_va = evaluate_model(model, X, y, cross_val=True, n_splits=10, verbose=True, err_type=err_type)
 
         # KNN regression
         print("base model: KNN regression")
         model = KNeighborsRegressor(n_neighbors=5)
-        err_tr, err_va = evaluate_model(model, X, y, valid_size=0.1, verbose=True) # no cross validation
-        # err_tr, err_va = evaluate_model(model, X, y, cross_val=True, n_splits=10, verbose=True)
+        err_tr, err_va = evaluate_model(model, X, y, valid_size=0.1, verbose=True, err_type=err_type) # no cross validation
+        # err_tr, err_va = evaluate_model(model, X, y, cross_val=True, n_splits=10, verbose=True, err_type=err_type)
 
         # lightGBM
         print("base model: lightGBM")
         model = lgb.LGBMRegressor(objective='regression', num_leaves=5, learning_rate=0.05)
-        err_tr, err_va = evaluate_model(model, X, y, valid_size=0.1, verbose=True) # no cross validation
-        # err_tr, err_va = evaluate_model(model, X, y, cross_val=True, n_splits=10, verbose=True)
+        err_tr, err_va = evaluate_model(model, X, y, valid_size=0.1, verbose=True, err_type=err_type) # no cross validation
+        # err_tr, err_va = evaluate_model(model, X, y, cross_val=True, n_splits=10, verbose=True, err_type=err_type)
 
         # Neural Net
-        # FIXME: sometimes would produce NaN as results. 
         print("base model: Neural Net")
-        model = NeuralNetRegressor(d, gpu=True)
-        err_tr, err_va = evaluate_model(model, X, y, valid_size=0.1, verbose=True, random_state=5) # no cross validation
-        # err_tr, err_va = evaluate_model(model, X, y, cross_val=True, n_splits=10, verbose=True)
+        model = NeuralNetRegressor(d, gpu=True, lr=1e-3, momentum=0.9, 
+                                    lammy=1e-5, batch_size=32, epochs=100, 
+                                    num_workers=6, verbose=False)
+        err_tr, err_va = evaluate_model(model, X, y, valid_size=0.1, verbose=True, random_state=None, err_type=err_type) # no cross validation
+        # err_tr, err_va = evaluate_model(model, X, y, cross_val=True, n_splits=10, verbose=True, err_type=err_type)
 
 
+    elif question == "nn_hyperparams":
+        # read preprocessed data as pandas dataframe
+        df = pd.read_csv('../data/train_sig_features.csv')
+        feats = df.drop('SalePrice', axis=1, inplace=False).columns.values      # features
+        X = df.drop('SalePrice', axis=1, inplace=False).values
+        y = df['SalePrice'].values
+
+        n, d = np.shape(X)
 
 
+        ## hyper-params
+        # initial value of tunable hyper params
+        lr = 1e-3       # learning rate
+        momentum = 0.9
+        lammy = 1e-5
+        batch_size = 32
+        # other NN function arguments
+        epochs = 100
+        num_workers = 6
+
+        # param for tuning process
+        num_divs = 10
+        err_type = 'squared'
+        valid_size = 0.2
+        n_splits = 5
+        
+        # tuning hyper-param: leanring rate
+        print(">>>start tuning lr")
+        lrs = np.linspace(1e-5, 1e-2, num=num_divs)
+        neuralNetHyperparamTuning(
+            'lr', lrs, X, y, lr=lr, momentum=momentum, lammy=lammy, batch_size=batch_size, 
+            epochs=epochs, num_workers=num_workers, err_type=err_type, 
+            cross_val=True, valid_size=valid_size, n_splits=n_splits, save_fig=True)
+
+        # param for momentum tuning
+        print(">>>start tuning momentum")
+        momentums = np.linspace(0.0, 0.9, num=num_divs)
+        neuralNetHyperparamTuning(
+            'momentum', momentums, X, y, lr=lr, momentum=momentum, lammy=lammy, batch_size=batch_size, 
+            epochs=epochs, num_workers=num_workers, err_type=err_type, 
+            cross_val=True, valid_size=valid_size, n_splits=n_splits, save_fig=True)
+
+        # lammy
+        print(">>>start tuning lammy")
+        lammies = np.linspace(1e-5, 1, num=num_divs)
+        neuralNetHyperparamTuning(
+            'lammy', lammies, X, y, lr=lr, momentum=momentum, lammy=lammy, batch_size=batch_size, 
+            epochs=epochs, num_workers=num_workers, err_type=err_type, 
+            cross_val=True, valid_size=valid_size, n_splits=n_splits, save_fig=True)
+        
+        # batch size
+        print(">>>start tuning batch_size")
+        # num_divs = 10
+        # batch_sizes = np.linspace(4, n, num=num_divs, dtype=int)
+        batch_sizes = np.array([2, 4, 8, 16, 32, 64, 128, 256, 512, n])
+        neuralNetHyperparamTuning(
+            'batch_size', batch_sizes, X, y, lr=lr, momentum=momentum, lammy=lammy, batch_size=batch_size, 
+            epochs=epochs, num_workers=num_workers, err_type=err_type, 
+            cross_val=True, valid_size=valid_size, n_splits=n_splits, save_fig=True)
 
 
+    elif question == "averaging":
+        df = pd.read_csv('../data/train_sig_features.csv')
+        feats = df.drop('SalePrice', axis=1, inplace=False).columns.values      # features
+        X = df.drop('SalePrice', axis=1, inplace=False).values
+        y = df['SalePrice'].values
 
+        n, d = np.shape(X)
 
+        models = []
+
+        models.append(Lasso(alpha=1, random_state=None))
+        models.append(ElasticNet(alpha=1, l1_ratio=0.5))
+        models.append(Ridge(alpha=1))
+        models.append(KNeighborsRegressor(n_neighbors=5))
+        models.append(lgb.LGBMRegressor(objective='regression', num_leaves=5, learning_rate=0.05))
+        
+        # FIXME: NN basemodel, training takes a lot of time
+        # models = NeuralNetRegressor(d, gpu=True, lr=1e-3, momentum=0.9, 
+        #                             lammy=1e-5, batch_size=32, epochs=100, 
+        #                             num_workers=6, verbose=False)
+
+        avg_model = AveragingRegressor(models)
+        # err_tr, err_va = evaluate_model(avg_model, X, y, valid_size=0.1, verbose=True, err_type='squared')
+        err_tr, err_va = evaluate_model(avg_model, X, y, cross_val=True, n_splits=10, verbose=True, err_type='rmsle')
+
+    elif question == "stacking":
+        df = pd.read_csv('../data/train_sig_features.csv')
+        feats = df.drop('SalePrice', axis=1, inplace=False).columns.values      # features
+        X = df.drop('SalePrice', axis=1, inplace=False).values
+        y = df['SalePrice'].values
+
+        n, d = np.shape(X)
+
+        base_models = []
+        base_models.append(Lasso(alpha=1, random_state=None))
+        base_models.append(ElasticNet(alpha=1, l1_ratio=0.5))
+        base_models.append(Ridge(alpha=1))
+        base_models.append(KNeighborsRegressor(n_neighbors=5))
+        base_models.append(lgb.LGBMRegressor(objective='regression', num_leaves=5, learning_rate=0.05))
+
+        # FIXME: NN basemodel, training takes a lot of time
+        # base_models = NeuralNetRegressor(d, gpu=True, lr=1e-3, momentum=0.9, 
+        #                             lammy=1e-5, batch_size=32, epochs=100, 
+        #                             num_workers=6, verbose=False)
+
+        # meta_model = Lasso(alpha=2) 
+        meta_model = ElasticNet(alpha=1, l1_ratio=0.5)
+
+        stacking_model = StackingRegressor(base_models, meta_model)
+        err_tr, err_va = evaluate_model(stacking_model, X, y, valid_size=0.1, verbose=True, err_type='rmsle')
+        # err_tr, err_va = evaluate_model(stacking_model, X, y, cross_val=True, n_splits=10, verbose=True, err_type='squared')

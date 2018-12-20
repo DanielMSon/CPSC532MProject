@@ -3,6 +3,8 @@ import pandas as pd
 
 from sklearn.utils import shuffle
 from sklearn.model_selection import KFold, cross_val_score, train_test_split
+from sklearn.metrics import mean_absolute_error, mean_squared_error, mean_squared_log_error
+
 
 # Standardize each column with mean 0 and standard deviation 1
 def standardize_cols(X, mu=None, sigma=None):
@@ -42,7 +44,7 @@ def standardize_dataset(data, data_valid, include_y_int=True):
 
     return X, y, X_valid, y_valid
 
-def evaluate_model(model, X, y, cross_val=False, valid_size=0.1, n_splits=10, shuffle_data=True, random_state=10, verbose=False):
+def evaluate_model(model, X, y, cross_val=False, valid_size=0.1, n_splits=10, shuffle_data=True, random_state=None, verbose=False, err_type='abs'):
     """ Evaluate model by splitting dataset into training and validation 
     sets and report both training and validation errors
     
@@ -58,6 +60,7 @@ def evaluate_model(model, X, y, cross_val=False, valid_size=0.1, n_splits=10, sh
                         Must divide 1.0 into an integer. (default: {10})
         shuffle_data {bool} -- whether to shuffle data at the beginning (default: {True})
         verbose {bool} -- whether to print out training and validation error (default: {False})
+        err_type {'squared', 'abs', 'rmsle'} -- what type of mean error (default: {'abs'})
     
     Returns:
         tuple -- err_tr, err_va
@@ -89,7 +92,7 @@ def evaluate_model(model, X, y, cross_val=False, valid_size=0.1, n_splits=10, sh
             X_train, X_valid = X[train_index], X[valid_index]
             y_train, y_valid = y[train_index], y[valid_index]
 
-            temp_err_tr, temp_err_va = _evaluate(model, X_train, y_train, X_valid, y_valid)
+            temp_err_tr, temp_err_va = _evaluate(model, X_train, y_train, X_valid, y_valid, err_type=err_type)
             
             # save errors
             errs_tr = np.append(errs_tr, temp_err_tr)
@@ -101,7 +104,7 @@ def evaluate_model(model, X, y, cross_val=False, valid_size=0.1, n_splits=10, sh
     else:
         # split data into training and validation
         X_train, X_valid, y_train, y_valid = train_test_split(X, y, test_size=valid_size, random_state=random_state)
-        err_tr, err_va = _evaluate(model, X_train, y_train, X_valid, y_valid)
+        err_tr, err_va = _evaluate(model, X_train, y_train, X_valid, y_valid, err_type=err_type)
     
     if (verbose == True):
         print("training error: {0:.6g}".format(err_tr))
@@ -109,7 +112,7 @@ def evaluate_model(model, X, y, cross_val=False, valid_size=0.1, n_splits=10, sh
 
     return err_tr, err_va
 
-def _evaluate(model, X_train, y_train, X_valid=None, y_valid=None):
+def _evaluate(model, X_train, y_train, X_valid=None, y_valid=None, err_type='abs'):
     """ helper function for evaluate_model()
     
     Arguments:
@@ -130,12 +133,24 @@ def _evaluate(model, X_train, y_train, X_valid=None, y_valid=None):
     
     model.fit(X_train, y_train)
     y_hat = model.predict(X_train)
-    err_tr = np.mean((y_hat-y_train)**2)
+
+    if err_type == 'squared':
+        err_tr = mean_squared_error(y_train, y_hat)
+    elif err_type == 'abs':
+        err_tr = mean_absolute_error(y_train, y_hat)
+    elif err_type == 'rmsle':
+        err_tr = np.sqrt(mean_squared_log_error(y_train, y_hat))
 
     if X_valid is not None and y_valid is not None:
         y_hat = model.predict(X_valid)
-        err_va = np.mean((y_hat - y_valid)**2)
+
+        if err_type == 'squared':
+            err_va = mean_squared_error(y_valid, y_hat)
+        elif err_type == 'abs':
+            err_va = mean_absolute_error(y_valid, y_hat)
+        elif err_type == 'rmsle':
+            err_va = np.sqrt(mean_squared_log_error(y_valid, y_hat))
     else:
-        err_va = None 
+        err_va = None
 
     return err_tr, err_va
