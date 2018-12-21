@@ -35,9 +35,12 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 
-from sklearn.ensemble import RandomForestRegressor
+from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
 from models import NeuralNetRegressor, neuralNetHyperparamTuning, AveragingRegressor, StackingRegressor, StackingAveragedModels
 import lightgbm as lgb
+
+# global constant/var
+dataset = 'train'
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
@@ -57,7 +60,7 @@ if __name__ == "__main__":
 
     # Fill in missing entries and change categorical into numerical features. Standardization not included
     elif question == "pre_processing":
-        X_train = pd.read_csv('../data/train.csv')
+        X_train = pd.read_csv('../data/{}.csv'.format(dataset))
 
         print("Size before pre-processing: ", X_train.shape)
 
@@ -181,12 +184,12 @@ if __name__ == "__main__":
         print("Size after hot encoding: ", X_train.shape)
         # endregion
 
-        X_train.to_csv('../data/train_preprocessed.csv', index=False)
+        X_train.to_csv('../data/{}_preprocessed.csv'.format(dataset), index=False)
 
     # Over varying lambda, bolasso to select features and calculate cross validated least square (with only selected
     # features) as score. Use to find optimal lambda
     elif question == "feature_select_lambda":
-        data = pd.read_csv('../data/train_preprocessed.csv')
+        data = pd.read_csv('../data/{}_preprocessed.csv'.format(dataset))
 
         # hyper-parameters
         lammy_max = 0.05  # max lambda value to try up to (not inclusive). Start from 0
@@ -238,7 +241,7 @@ if __name__ == "__main__":
     # Run more extensive bolasso over given lambda value. Prints features to keep and drop. Saves data set with only
     # significant features (and y or SalePrice) as a csv.
     elif question == "feature_select":
-        data = pd.read_csv('../data/train_preprocessed.csv')
+        data = pd.read_csv('../data/{}_preprocessed.csv'.format(dataset))
 
         # hyper-parameters
         lammy = 0.01
@@ -271,7 +274,7 @@ if __name__ == "__main__":
         data.drop(labels=['SalePrice'], axis=1, inplace=True)
         data.drop(data.columns[col_drop_list], axis=1, inplace=True)
         data.insert(0, 'SalePrice', SalePriceCol)
-        data.to_csv('../data/train_sig_features.csv', index=False)
+        data.to_csv('../data/{}_sig_features.csv'.format(dataset), index=False)
 
         # report
         print("Number of features dropped: ", len(col_drop_list))
@@ -284,7 +287,7 @@ if __name__ == "__main__":
     elif question == "anova":
         import warnings
         warnings.filterwarnings("ignore")
-        data = pd.read_csv('../data/train_preprocessed.csv')
+        data = pd.read_csv('../data/{}_preprocessed.csv'.format(dataset))
 
         # hyper-parameters
         numfeat = 50
@@ -329,13 +332,13 @@ if __name__ == "__main__":
         data.drop(labels=['SalePrice'], axis=1, inplace=True)
         data = data[feature_names]
         data.insert(0, 'SalePrice', SalePriceCol)
-        data.to_csv('../data/train_anova_features.csv', index=False)
+        data.to_csv('../data/{}_anova_features.csv'.format(dataset), index=False)
 
 
     elif question == "anovaplot":
         import warnings
         warnings.filterwarnings("ignore")
-        data = pd.read_csv('../data/train_preprocessed.csv')
+        data = pd.read_csv('../data/{}_preprocessed.csv'.format(dataset))
 
         # hyper-parameters
         k_features = 244
@@ -390,7 +393,7 @@ if __name__ == "__main__":
 
 
     elif question == "xgbregressor":
-        data = pd.read_csv('../data/train_preprocessed.csv')
+        data = pd.read_csv('../data/{}_preprocessed.csv'.format(dataset))
         X, y, _, _ = standardize_dataset(data, data)
         X_val, X_remain, y_val, y_remain = train_test_split(X, y, test_size=0.50)
 
@@ -433,11 +436,11 @@ if __name__ == "__main__":
         data.drop(labels=['SalePrice'], axis=1, inplace=True)
         data = data[selected_features]
         data.insert(0, 'SalePrice', SalePriceCol)
-        data.to_csv('../data/train_xgb_features.csv', index=False)
+        data.to_csv('../data/{}_xgb_features.csv'.format(dataset), index=False)
 
 
     elif question == "xgbregressorplot":
-        data = pd.read_csv('../data/train_preprocessed.csv')
+        data = pd.read_csv('../data/{}_preprocessed.csv'.format(dataset))
         X, y, _, _ = standardize_dataset(data, data)
         X_val, X_remain, y_val, y_remain = train_test_split(X, y, test_size=0.50)
 
@@ -523,8 +526,8 @@ if __name__ == "__main__":
 
         # ElasticNet
         print("\nbase model: ElasticNet (L2-loss with L1-reg and L2-reg)")
-        # model = ElasticNet(alpha=1e-4, l1_ratio=0.5, random_state=2)
-        model = make_pipeline(RobustScaler(), ElasticNet(alpha=0.0005, l1_ratio=0.9, random_state=3))
+        model = ElasticNet(alpha=0.0005, l1_ratio=0.5, random_state=2)
+        # model = make_pipeline(RobustScaler(), ElasticNet(alpha=0.0005, l1_ratio=0.9, random_state=3))
 
         err_tr, err_va = evaluate_model(model, X, y, cross_val=cross_val, valid_size=valid_size, shuffle_data=shuffle_data, 
                                         n_splits=n_splits, verbose=True, err_type=err_type)
@@ -551,6 +554,15 @@ if __name__ == "__main__":
         model = RandomForestRegressor(n_estimators=100, bootstrap=True, max_depth=12, n_jobs=-1)
         err_tr, err_va = evaluate_model(model, X, y, cross_val=cross_val, valid_size=valid_size, shuffle_data=shuffle_data,  
                                         n_splits=n_splits, verbose=True, err_type=err_type)
+        
+        print("\nbase model: Gradient Boosting")
+        model = GradientBoostingRegressor(n_estimators=3000, learning_rate=0.05,
+                                    max_depth=12, max_features='sqrt',
+                                    min_samples_leaf=4, min_samples_split=10, 
+                                    loss='huber', random_state =5)
+        err_tr, err_va = evaluate_model(model, X, y, cross_val=cross_val, valid_size=valid_size, shuffle_data=shuffle_data,  
+                                        n_splits=n_splits, verbose=True, err_type=err_type)
+        
         # Neural Net
         print("\nbase model: Neural Net")
         model = NeuralNetRegressor(d, gpu=True, lr=1e-3, momentum=0.9, 
@@ -621,10 +633,10 @@ if __name__ == "__main__":
 
 
     elif question == "averaging":
-        dataset_name = 'preprocessed'
+        # dataset_name = 'preprocessed'
         # dataset_name = 'sig_features'
         # dataset_name = 'anova_features'
-        # dataset_name = 'xgb_features'
+        dataset_name = 'xgb_features'
 
         # read preprocessed data as pandas dataframe
         df = pd.read_csv('../data/train_{}.csv'.format(dataset_name))
@@ -647,6 +659,7 @@ if __name__ == "__main__":
         models.append(ElasticNet(alpha=0.5, l1_ratio=0.5))
         models.append(Ridge(alpha=1))
         models.append(KNeighborsRegressor(n_neighbors=10))
+        # models.append(GradientBoostingRegressor(n_estimators=2000, learning_rate=0.05))
         models.append(lgb.LGBMRegressor(objective='regression', num_leaves=25, learning_rate=0.05))
         models.append(RandomForestRegressor(n_estimators=100, bootstrap=True, max_depth=12, n_jobs=-1))
         
@@ -660,10 +673,10 @@ if __name__ == "__main__":
                                         n_splits=n_splits, verbose=True, err_type=err_type)
 
     elif question == "stacking":
-        # dataset_name = 'preprocessed'
+        dataset_name = 'preprocessed'
         # dataset_name = 'sig_features'
         # dataset_name = 'anova_features'
-        dataset_name = 'xgb_features'
+        # dataset_name = 'xgb_features'
 
         # read preprocessed data as pandas dataframe
         df = pd.read_csv('../data/train_{}.csv'.format(dataset_name))
@@ -688,6 +701,9 @@ if __name__ == "__main__":
         base_models.append(lgb.LGBMRegressor(objective='regression', num_leaves=25, learning_rate=0.05))
         base_models.append(RandomForestRegressor(n_estimators=100, bootstrap=True, max_depth=12, n_jobs=-1))
 
+        # gradient boosting takes way too much time (even longer than NN)
+        # base_models.append(GradientBoostingRegressor(n_estimators=2000, learning_rate=0.05))
+        
         # FIXME: NN basemodel, training takes a lot of time
         # base_models = NeuralNetRegressor(d, gpu=True, lr=1e-3, momentum=0.9, 
         #                             lammy=1e-5, batch_size=32, epochs=100, 
@@ -696,15 +712,15 @@ if __name__ == "__main__":
         meta_model = Lasso(alpha=1e-4) 
         # meta_model = ElasticNet(alpha=1, l1_ratio=0.5)
         # meta_model = Ridge(alpha=1)
-
+        
         stacking_model = StackingRegressor(base_models, meta_model, n_folds=5)
         err_tr, err_va = evaluate_model(stacking_model, X, y, cross_val=cross_val, valid_size=valid_size, shuffle_data=shuffle_data, 
                                         n_splits=n_splits, verbose=True, err_type=err_type)
 
-        # print("Kaggle implementation")
-        # stacking_model = StackingAveragedModels(base_models, meta_model, n_folds=5)
-        # err_tr, err_va = evaluate_model(stacking_model, X, y, cross_val=cross_val, valid_size=valid_size, shuffle_data=shuffle_data, 
-        #                                 n_splits=n_splits, verbose=True, err_type=err_type)
+        print("Kaggle implementation")
+        stacking_model = StackingAveragedModels(base_models, meta_model, n_folds=5)
+        err_tr, err_va = evaluate_model(stacking_model, X, y, cross_val=cross_val, valid_size=valid_size, shuffle_data=shuffle_data, 
+                                        n_splits=n_splits, verbose=True, err_type=err_type)
 
 
     elif question == "base_model_tuning":
