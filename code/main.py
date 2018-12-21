@@ -34,6 +34,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 
+from sklearn.ensemble import RandomForestRegressor
 from models import NeuralNetRegressor, neuralNetHyperparamTuning, AveragingRegressor, StackingRegressor
 import lightgbm as lgb
 
@@ -495,46 +496,52 @@ if __name__ == "__main__":
         n, d = np.shape(X)
 
         err_type = 'rmsle'  # 'abs', 'squared', 'rmsle'
+        cross_val = False 
+        valid_size = 0.1
+        n_splits = 10
 
         ## base models
         # test Lasso model
         print("base model: Lasso (L2-loss with L1-reg)")
         model = Lasso(alpha=1, random_state=2)
-        err_tr, err_va = evaluate_model(model, X, y, valid_size=0.1, verbose=True, err_type=err_type) # no cross validation
-        # err_tr, err_va = evaluate_model(model, X, y, cross_val=True, n_splits=10, verbose=True, err_type)
+        err_tr, err_va = evaluate_model(model, X, y, cross_val=cross_val, valid_size=valid_size, 
+                                        n_splits=n_splits, verbose=True, err_type=err_type)
 
         # ElasticNet
         print("base model: ElasticNet (L2-loss with L1-reg and L2-reg)")
         model = ElasticNet(alpha=1, l1_ratio=0.5, random_state=2)
-        err_tr, err_va = evaluate_model(model, X, y, valid_size=0.1, verbose=True, err_type=err_type) # no cross validation
-        # err_tr, err_va = evaluate_model(model, X, y, cross_val=True, n_splits=10, verbose=True, err_type=err_type)
-
+        err_tr, err_va = evaluate_model(model, X, y, cross_val=cross_val, valid_size=valid_size, 
+                                        n_splits=n_splits, verbose=True, err_type=err_type)
         # Ridge
         print("base model: Ridge (L2-loss with L2_reg)")
         model = Ridge(alpha=1, random_state=2)
-        err_tr, err_va = evaluate_model(model, X, y, valid_size=0.1, verbose=True, err_type=err_type) # no cross validation
-        # err_tr, err_va = evaluate_model(model, X, y, cross_val=True, n_splits=10, verbose=True, err_type=err_type)
+        err_tr, err_va = evaluate_model(model, X, y, cross_val=cross_val, valid_size=valid_size, 
+                                        n_splits=n_splits, verbose=True, err_type=err_type)
 
         # KNN regression
         print("base model: KNN regression")
         model = KNeighborsRegressor(n_neighbors=5)
-        err_tr, err_va = evaluate_model(model, X, y, valid_size=0.1, verbose=True, err_type=err_type) # no cross validation
-        # err_tr, err_va = evaluate_model(model, X, y, cross_val=True, n_splits=10, verbose=True, err_type=err_type)
+        err_tr, err_va = evaluate_model(model, X, y, cross_val=cross_val, valid_size=valid_size, 
+                                        n_splits=n_splits, verbose=True, err_type=err_type)
 
         # lightGBM
         print("base model: lightGBM")
         model = lgb.LGBMRegressor(objective='regression', num_leaves=5, learning_rate=0.05)
-        err_tr, err_va = evaluate_model(model, X, y, valid_size=0.1, verbose=True, err_type=err_type) # no cross validation
-        # err_tr, err_va = evaluate_model(model, X, y, cross_val=True, n_splits=10, verbose=True, err_type=err_type)
+        err_tr, err_va = evaluate_model(model, X, y, cross_val=cross_val, valid_size=valid_size, 
+                                        n_splits=n_splits, verbose=True, err_type=err_type)
 
+        # Random forest regressor
+        print("base model: Random Forest Regressor")
+        model = RandomForestRegressor(n_estimators=10, bootstrap=True, n_jobs=-1)
+        err_tr, err_va = evaluate_model(model, X, y, cross_val=cross_val, valid_size=valid_size, 
+                                        n_splits=n_splits, verbose=True, err_type=err_type)
         # Neural Net
         print("base model: Neural Net")
         model = NeuralNetRegressor(d, gpu=True, lr=1e-3, momentum=0.9, 
                                     lammy=1e-5, batch_size=32, epochs=100, 
                                     num_workers=6, verbose=False)
-        err_tr, err_va = evaluate_model(model, X, y, valid_size=0.1, verbose=True, random_state=None, err_type=err_type) # no cross validation
-        # err_tr, err_va = evaluate_model(model, X, y, cross_val=True, n_splits=10, verbose=True, err_type=err_type)
-
+        err_tr, err_va = evaluate_model(model, X, y, cross_val=cross_val, valid_size=valid_size, 
+                                        n_splits=n_splits, verbose=True, err_type=err_type)
 
     elif question == "nn_hyperparams":
         # read preprocessed data as pandas dataframe
@@ -648,3 +655,84 @@ if __name__ == "__main__":
         stacking_model = StackingRegressor(base_models, meta_model)
         err_tr, err_va = evaluate_model(stacking_model, X, y, valid_size=0.1, verbose=True, err_type='rmsle')
         # err_tr, err_va = evaluate_model(stacking_model, X, y, cross_val=True, n_splits=10, verbose=True, err_type='squared')
+
+    elif question == "base_model_tuning":
+        dataset_name = 'sig_features'
+        # dataset_name = 'preprocessed'
+        # dataset_name = 'anova_features'
+        
+        df = pd.read_csv('../data/train_{}.csv'.format(dataset_name))
+        feats = df.drop('SalePrice', axis=1, inplace=False).columns.values      # features
+        X = df.drop('SalePrice', axis=1, inplace=False).values
+        y = df['SalePrice'].values
+
+        cross_val = True
+        valid_size = 0.25
+        n_splits = 4
+        err_type = 'squared'
+        shuffle_data = False
+
+        num_vars = 50
+
+        #
+        errs_col_name = ['Lasso', 'ElasticNet', 'Ridge', 'KNNRegressor', 'lightGBM', 'RandomForestRegressor']
+        var_name = ['alpha', 'alpha', 'alpha', 'n_neighbors', 'num_leaves', 'max_depth']
+        
+        # tunable vars
+        # alphas = np.linspace(0.1, 5, num=num_vars)
+        alphas = np.linspace(0.1, 1, num=num_vars)
+        n_neighbors = np.linspace(1, 50, num=num_vars, dtype=int)
+        num_leaves = np.linspace(5, 200, num=num_vars, dtype=int)
+        max_depths = np.linspace(5, 100, num=num_vars, dtype=int)
+
+        errs_tr = np.empty((len(alphas), len(errs_col_name)))    # col0: Lasso, col1: ENet, col2: Ridge
+        errs_va = np.empty((len(alphas), len(errs_col_name)))
+
+        for i in range(num_vars):
+            
+            # Lasso
+            model = Lasso(alpha=alphas[i])
+            errs_tr[i][0], errs_va[i][0] = evaluate_model(model, X, y, cross_val=cross_val, valid_size=valid_size, shuffle_data=shuffle_data, 
+                                                            n_splits=n_splits, verbose=True, err_type=err_type)
+
+            # ElasticNet
+            model = ElasticNet(alpha=alphas[i])
+            errs_tr[i][1], errs_va[i][1] = evaluate_model(model, X, y, cross_val=cross_val, valid_size=valid_size, shuffle_data=shuffle_data,  
+                                                            n_splits=n_splits, verbose=True, err_type=err_type)
+
+            # Ridge
+            model = Ridge(alpha=alphas[i])
+            errs_tr[i][2], errs_va[i][2] = evaluate_model(model, X, y, cross_val=cross_val, valid_size=valid_size, shuffle_data=shuffle_data,  
+                                                            n_splits=n_splits, verbose=True, err_type=err_type)
+            
+            # KNN regressor
+            model = KNeighborsRegressor(n_neighbors=n_neighbors[i], n_jobs=-1)
+            errs_tr[i,3], errs_va[i,3] = evaluate_model(model, X, y, cross_val=cross_val, valid_size=valid_size, shuffle_data=shuffle_data,  
+                                                n_splits=n_splits, verbose=True, err_type=err_type)
+
+            # light GBM
+            model = lgb.LGBMRegressor(objective='regression', num_leaves=num_leaves[i], learning_rate=0.05)
+            errs_tr[i,4], errs_va[i,4] = evaluate_model(model, X, y, cross_val=cross_val, valid_size=valid_size, shuffle_data=shuffle_data,  
+                                                n_splits=n_splits, verbose=True, err_type=err_type)
+
+            # random forest 
+            model = RandomForestRegressor(n_estimators=100, max_depth=max_depths[i], bootstrap=True, n_jobs=-1)
+            errs_tr[i,5], errs_va[i,5] = evaluate_model(model, X, y, cross_val=cross_val, valid_size=valid_size, shuffle_data=shuffle_data,  
+                                                n_splits=n_splits, verbose=True, err_type=err_type)
+
+
+        vars = np.column_stack([alphas, alphas, alphas, n_neighbors, num_leaves, max_depths])
+
+        for j, name in enumerate(errs_col_name, 0):
+            plt.figure()
+            plt.plot(vars[:,j], errs_tr[:,j], label="training errors")
+            plt.plot(vars[:,j], errs_va[:,j], label="validation errors")
+            plt.xlabel('{}'.format(var_name[j]))
+            plt.ylabel('errors ({})'.format(err_type))
+            plt.title('{} tuning (cross_validation: {})'.format(name, str(cross_val)))
+            plt.legend()
+            plt.grid()
+            fname=os.path.join('..','figs','[{}]-{}_tuning.png'.format(dataset_name, name))
+            plt.savefig(fname)
+
+        plt.show()

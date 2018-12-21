@@ -43,17 +43,12 @@ class Net(nn.Module):
         l2 = 256
         l3 = 256
         l4 = 256
-        # l5 = 64
-
-        # l1 = 37
-        # l2 = 5
 
         self.fc1 = nn.Linear(num_features, l1)
 
         self.fc2 = nn.Linear(l1, l2)
         self.fc3 = nn.Linear(l2, l3)
         self.fc4 = nn.Linear(l3, l4)
-        # self.fc5 = nn.Linear(l4, l5)
         
         self.fc_out = nn.Linear(l4, 1)     # keep the last layer before output helps reducing the occurace of NaN
 
@@ -71,7 +66,6 @@ class Net(nn.Module):
         x = F.relu(self.fc2(x))
         x = F.relu(self.fc3(x))
         x = F.relu(self.fc4(x))
-        # x = F.relu(self.fc5(x))
         x = self.fc_out(x)
 
         return x

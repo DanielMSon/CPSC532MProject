@@ -74,18 +74,13 @@ def evaluate_model(model, X, y, cross_val=False, valid_size=0.1, n_splits=10, sh
     err_tr = 0
     err_va = 0
 
-    # print input X size
-    # if (verbose == True):
-        # n, d = np.shape(X)
-        # print("X shape: {} x {}".format(str(n), str(d)))
-
     # shuffle data
-    if (shuffle_data == True):
-        X, y = shuffle(X, y, random_state=random_state)
+    # if (shuffle_data == True):
+    #     X, y = shuffle(X, y, random_state=random_state)
 
     if (cross_val == True):
         # split data for KFold and change n_folds 
-        kf = KFold(n_splits=n_splits)
+        kf = KFold(n_splits=n_splits, shuffle=shuffle_data)
 
         # evaluate with cross validation
         for train_index, valid_index in kf.split(X):
@@ -103,7 +98,7 @@ def evaluate_model(model, X, y, cross_val=False, valid_size=0.1, n_splits=10, sh
 
     else:
         # split data into training and validation
-        X_train, X_valid, y_train, y_valid = train_test_split(X, y, test_size=valid_size, random_state=random_state)
+        X_train, X_valid, y_train, y_valid = train_test_split(X, y, test_size=valid_size, random_state=random_state, shuffle=shuffle_data)
         err_tr, err_va = _evaluate(model, X_train, y_train, X_valid, y_valid, err_type=err_type)
     
     if (verbose == True):
