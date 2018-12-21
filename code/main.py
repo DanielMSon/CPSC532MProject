@@ -487,8 +487,13 @@ if __name__ == "__main__":
 
 
     elif question == "base_models":
+        dataset_name = 'sig_features'
+        # dataset_name = 'preprocessed'
+        # dataset_name = 'anova_features'
+        # dataset_name = 'xgb_features'
+
         # read preprocessed data as pandas dataframe
-        df = pd.read_csv('../data/train_sig_features.csv')
+        df = pd.read_csv('../data/train_{}.csv'.format(dataset_name))
         feats = df.drop('SalePrice', axis=1, inplace=False).columns.values      # features
         X = df.drop('SalePrice', axis=1, inplace=False).values
         y = df['SalePrice'].values
@@ -496,51 +501,52 @@ if __name__ == "__main__":
         n, d = np.shape(X)
 
         err_type = 'rmsle'  # 'abs', 'squared', 'rmsle'
-        cross_val = False 
-        valid_size = 0.1
-        n_splits = 10
+        cross_val = True 
+        valid_size = 0.25
+        n_splits = 4
+        shuffle_data = True
 
         ## base models
         # test Lasso model
-        print("base model: Lasso (L2-loss with L1-reg)")
-        model = Lasso(alpha=1, random_state=2)
-        err_tr, err_va = evaluate_model(model, X, y, cross_val=cross_val, valid_size=valid_size, 
+        print("\nbase model: Lasso (L2-loss with L1-reg)")
+        model = Lasso(alpha=0.5, random_state=2)
+        err_tr, err_va = evaluate_model(model, X, y, cross_val=cross_val, valid_size=valid_size, shuffle_data=shuffle_data, 
                                         n_splits=n_splits, verbose=True, err_type=err_type)
 
         # ElasticNet
-        print("base model: ElasticNet (L2-loss with L1-reg and L2-reg)")
-        model = ElasticNet(alpha=1, l1_ratio=0.5, random_state=2)
-        err_tr, err_va = evaluate_model(model, X, y, cross_val=cross_val, valid_size=valid_size, 
+        print("\nbase model: ElasticNet (L2-loss with L1-reg and L2-reg)")
+        model = ElasticNet(alpha=0.5, l1_ratio=0.5, random_state=2)
+        err_tr, err_va = evaluate_model(model, X, y, cross_val=cross_val, valid_size=valid_size, shuffle_data=shuffle_data, 
                                         n_splits=n_splits, verbose=True, err_type=err_type)
         # Ridge
-        print("base model: Ridge (L2-loss with L2_reg)")
+        print("\nbase model: Ridge (L2-loss with L2_reg)")
         model = Ridge(alpha=1, random_state=2)
-        err_tr, err_va = evaluate_model(model, X, y, cross_val=cross_val, valid_size=valid_size, 
+        err_tr, err_va = evaluate_model(model, X, y, cross_val=cross_val, valid_size=valid_size, shuffle_data=shuffle_data,  
                                         n_splits=n_splits, verbose=True, err_type=err_type)
 
         # KNN regression
-        print("base model: KNN regression")
-        model = KNeighborsRegressor(n_neighbors=5)
-        err_tr, err_va = evaluate_model(model, X, y, cross_val=cross_val, valid_size=valid_size, 
+        print("\nbase model: KNN regression")
+        model = KNeighborsRegressor(n_neighbors=10)
+        err_tr, err_va = evaluate_model(model, X, y, cross_val=cross_val, valid_size=valid_size, shuffle_data=shuffle_data,  
                                         n_splits=n_splits, verbose=True, err_type=err_type)
 
         # lightGBM
-        print("base model: lightGBM")
-        model = lgb.LGBMRegressor(objective='regression', num_leaves=5, learning_rate=0.05)
-        err_tr, err_va = evaluate_model(model, X, y, cross_val=cross_val, valid_size=valid_size, 
+        print("\nbase model: lightGBM")
+        model = lgb.LGBMRegressor(objective='regression', num_leaves=25, learning_rate=0.05)
+        err_tr, err_va = evaluate_model(model, X, y, cross_val=cross_val, valid_size=valid_size, shuffle_data=shuffle_data,  
                                         n_splits=n_splits, verbose=True, err_type=err_type)
 
         # Random forest regressor
-        print("base model: Random Forest Regressor")
-        model = RandomForestRegressor(n_estimators=10, bootstrap=True, n_jobs=-1)
-        err_tr, err_va = evaluate_model(model, X, y, cross_val=cross_val, valid_size=valid_size, 
+        print("\nbase model: Random Forest Regressor")
+        model = RandomForestRegressor(n_estimators=100, bootstrap=True, max_depth=12, n_jobs=-1)
+        err_tr, err_va = evaluate_model(model, X, y, cross_val=cross_val, valid_size=valid_size, shuffle_data=shuffle_data,  
                                         n_splits=n_splits, verbose=True, err_type=err_type)
         # Neural Net
-        print("base model: Neural Net")
+        print("\nbase model: Neural Net")
         model = NeuralNetRegressor(d, gpu=True, lr=1e-3, momentum=0.9, 
                                     lammy=1e-5, batch_size=32, epochs=100, 
                                     num_workers=6, verbose=False)
-        err_tr, err_va = evaluate_model(model, X, y, cross_val=cross_val, valid_size=valid_size, 
+        err_tr, err_va = evaluate_model(model, X, y, cross_val=cross_val, valid_size=valid_size, shuffle_data=shuffle_data,  
                                         n_splits=n_splits, verbose=True, err_type=err_type)
 
     elif question == "nn_hyperparams":
@@ -605,20 +611,33 @@ if __name__ == "__main__":
 
 
     elif question == "averaging":
-        df = pd.read_csv('../data/train_sig_features.csv')
+        dataset_name = 'sig_features'
+        # dataset_name = 'preprocessed'
+        # dataset_name = 'anova_features'
+        # dataset_name = 'xgb_features'
+
+        # read preprocessed data as pandas dataframe
+        df = pd.read_csv('../data/train_{}.csv'.format(dataset_name))
         feats = df.drop('SalePrice', axis=1, inplace=False).columns.values      # features
         X = df.drop('SalePrice', axis=1, inplace=False).values
         y = df['SalePrice'].values
 
         n, d = np.shape(X)
 
+        err_type = 'rmsle'  # 'abs', 'squared', 'rmsle'
+        cross_val = True 
+        valid_size = 0.25
+        n_splits = 4
+        shuffle_data = True
+
         models = []
 
-        models.append(Lasso(alpha=1, random_state=None))
-        models.append(ElasticNet(alpha=1, l1_ratio=0.5))
+        models.append(Lasso(alpha=0.5, random_state=None))
+        models.append(ElasticNet(alpha=0.5, l1_ratio=0.5))
         models.append(Ridge(alpha=1))
-        models.append(KNeighborsRegressor(n_neighbors=5))
-        models.append(lgb.LGBMRegressor(objective='regression', num_leaves=5, learning_rate=0.05))
+        models.append(KNeighborsRegressor(n_neighbors=10))
+        models.append(lgb.LGBMRegressor(objective='regression', num_leaves=25, learning_rate=0.05))
+        models.append(RandomForestRegressor(n_estimators=100, bootstrap=True, max_depth=12, n_jobs=-1))
         
         # FIXME: NN basemodel, training takes a lot of time
         # models = NeuralNetRegressor(d, gpu=True, lr=1e-3, momentum=0.9, 
@@ -626,39 +645,53 @@ if __name__ == "__main__":
         #                             num_workers=6, verbose=False)
 
         avg_model = AveragingRegressor(models)
-        # err_tr, err_va = evaluate_model(avg_model, X, y, valid_size=0.1, verbose=True, err_type='squared')
-        err_tr, err_va = evaluate_model(avg_model, X, y, cross_val=True, n_splits=10, verbose=True, err_type='rmsle')
+        err_tr, err_va = evaluate_model(avg_model, X, y, cross_val=cross_val, valid_size=valid_size, shuffle_data=shuffle_data, 
+                                        n_splits=n_splits, verbose=True, err_type=err_type)
 
     elif question == "stacking":
-        df = pd.read_csv('../data/train_sig_features.csv')
+        dataset_name = 'sig_features'
+        # dataset_name = 'preprocessed'
+        # dataset_name = 'anova_features'
+        # dataset_name = 'xgb_features'
+
+        # read preprocessed data as pandas dataframe
+        df = pd.read_csv('../data/train_{}.csv'.format(dataset_name))
         feats = df.drop('SalePrice', axis=1, inplace=False).columns.values      # features
         X = df.drop('SalePrice', axis=1, inplace=False).values
         y = df['SalePrice'].values
 
         n, d = np.shape(X)
 
+        err_type = 'rmsle'  # 'abs', 'squared', 'rmsle'
+        cross_val = True 
+        valid_size = 0.25
+        n_splits = 4
+        shuffle_data = True
+
         base_models = []
-        base_models.append(Lasso(alpha=1, random_state=None))
-        base_models.append(ElasticNet(alpha=1, l1_ratio=0.5))
+        base_models.append(Lasso(alpha=0.5, random_state=None))
+        base_models.append(ElasticNet(alpha=0.5, l1_ratio=0.5))
         base_models.append(Ridge(alpha=1))
-        base_models.append(KNeighborsRegressor(n_neighbors=5))
-        base_models.append(lgb.LGBMRegressor(objective='regression', num_leaves=5, learning_rate=0.05))
+        base_models.append(KNeighborsRegressor(n_neighbors=10))
+        base_models.append(lgb.LGBMRegressor(objective='regression', num_leaves=25, learning_rate=0.05))
+        base_models.append(RandomForestRegressor(n_estimators=100, bootstrap=True, max_depth=12, n_jobs=-1))
 
         # FIXME: NN basemodel, training takes a lot of time
         # base_models = NeuralNetRegressor(d, gpu=True, lr=1e-3, momentum=0.9, 
         #                             lammy=1e-5, batch_size=32, epochs=100, 
         #                             num_workers=6, verbose=False)
 
-        # meta_model = Lasso(alpha=2) 
-        meta_model = ElasticNet(alpha=1, l1_ratio=0.5)
+        # meta_model = Lasso(alpha=0.1) 
+        # meta_model = ElasticNet(alpha=1, l1_ratio=0.5)
+        meta_model = Ridge(alpha=1)
 
         stacking_model = StackingRegressor(base_models, meta_model)
-        err_tr, err_va = evaluate_model(stacking_model, X, y, valid_size=0.1, verbose=True, err_type='rmsle')
-        # err_tr, err_va = evaluate_model(stacking_model, X, y, cross_val=True, n_splits=10, verbose=True, err_type='squared')
+        err_tr, err_va = evaluate_model(stacking_model, X, y, cross_val=cross_val, valid_size=valid_size, shuffle_data=shuffle_data, 
+                                        n_splits=n_splits, verbose=True, err_type=err_type)
 
     elif question == "base_model_tuning":
-        dataset_name = 'sig_features'
-        # dataset_name = 'preprocessed'
+        # dataset_name = 'sig_features'
+        dataset_name = 'preprocessed'
         # dataset_name = 'anova_features'
         
         df = pd.read_csv('../data/train_{}.csv'.format(dataset_name))
@@ -666,7 +699,7 @@ if __name__ == "__main__":
         X = df.drop('SalePrice', axis=1, inplace=False).values
         y = df['SalePrice'].values
 
-        cross_val = True
+        cross_val = False
         valid_size = 0.25
         n_splits = 4
         err_type = 'squared'
@@ -696,7 +729,7 @@ if __name__ == "__main__":
                                                             n_splits=n_splits, verbose=True, err_type=err_type)
 
             # ElasticNet
-            model = ElasticNet(alpha=alphas[i])
+            model = ElasticNet(alpha=alphas[i], l1_ratio=0.2)
             errs_tr[i][1], errs_va[i][1] = evaluate_model(model, X, y, cross_val=cross_val, valid_size=valid_size, shuffle_data=shuffle_data,  
                                                             n_splits=n_splits, verbose=True, err_type=err_type)
 
