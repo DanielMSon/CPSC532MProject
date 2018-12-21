@@ -487,10 +487,10 @@ if __name__ == "__main__":
 
 
     elif question == "base_models":
-        dataset_name = 'sig_features'
+        # dataset_name = 'sig_features'
         # dataset_name = 'preprocessed'
         # dataset_name = 'anova_features'
-        # dataset_name = 'xgb_features'
+        dataset_name = 'xgb_features'
 
         # read preprocessed data as pandas dataframe
         df = pd.read_csv('../data/train_{}.csv'.format(dataset_name))
@@ -611,10 +611,10 @@ if __name__ == "__main__":
 
 
     elif question == "averaging":
-        dataset_name = 'sig_features'
+        # dataset_name = 'sig_features'
         # dataset_name = 'preprocessed'
         # dataset_name = 'anova_features'
-        # dataset_name = 'xgb_features'
+        dataset_name = 'xgb_features'
 
         # read preprocessed data as pandas dataframe
         df = pd.read_csv('../data/train_{}.csv'.format(dataset_name))
@@ -649,10 +649,10 @@ if __name__ == "__main__":
                                         n_splits=n_splits, verbose=True, err_type=err_type)
 
     elif question == "stacking":
-        dataset_name = 'sig_features'
+        # dataset_name = 'sig_features'
         # dataset_name = 'preprocessed'
         # dataset_name = 'anova_features'
-        # dataset_name = 'xgb_features'
+        dataset_name = 'xgb_features'
 
         # read preprocessed data as pandas dataframe
         df = pd.read_csv('../data/train_{}.csv'.format(dataset_name))
