@@ -18,6 +18,7 @@ from scipy.special import boxcox1p
 from scipy.stats import boxcox_normmax
 
 from sklearn.preprocessing import LabelEncoder
+from sklearn.pipeline import make_pipeline
 
 ##ANOVA
 from sklearn.feature_selection import SelectKBest
@@ -26,7 +27,7 @@ from sklearn import preprocessing
 
 #XGBoost
 from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import Imputer
+from sklearn.preprocessing import Imputer, RobustScaler
 from xgboost import XGBRegressor
 from sklearn.metrics import mean_absolute_error
 
@@ -35,7 +36,7 @@ import torch.nn as nn
 import torch.optim as optim
 
 from sklearn.ensemble import RandomForestRegressor
-from models import NeuralNetRegressor, neuralNetHyperparamTuning, AveragingRegressor, StackingRegressor
+from models import NeuralNetRegressor, neuralNetHyperparamTuning, AveragingRegressor, StackingRegressor, StackingAveragedModels
 import lightgbm as lgb
 
 if __name__ == "__main__":
@@ -487,10 +488,10 @@ if __name__ == "__main__":
 
 
     elif question == "base_models":
+        dataset_name = 'preprocessed'
         # dataset_name = 'sig_features'
-        # dataset_name = 'preprocessed'
         # dataset_name = 'anova_features'
-        dataset_name = 'xgb_features'
+        # dataset_name = 'xgb_features'
 
         # read preprocessed data as pandas dataframe
         df = pd.read_csv('../data/train_{}.csv'.format(dataset_name))
@@ -500,8 +501,8 @@ if __name__ == "__main__":
 
         n, d = np.shape(X)
 
-        err_type = 'rmsle'  # 'abs', 'squared', 'rmsle'
-        cross_val = True 
+        err_type = 'rmse'  # 'abs', 'squared', 'rmsle'
+        cross_val = True
         valid_size = 0.25
         n_splits = 4
         shuffle_data = True
@@ -509,13 +510,22 @@ if __name__ == "__main__":
         ## base models
         # test Lasso model
         print("\nbase model: Lasso (L2-loss with L1-reg)")
-        model = Lasso(alpha=0.5, random_state=2)
+        model = Lasso(alpha=0.0005, random_state=1)
         err_tr, err_va = evaluate_model(model, X, y, cross_val=cross_val, valid_size=valid_size, shuffle_data=shuffle_data, 
                                         n_splits=n_splits, verbose=True, err_type=err_type)
 
+        # # doesn't really make a difference
+        # print("\nLasso robustscaler")
+        # model = make_pipeline(RobustScaler(), Lasso(alpha=0.0005, random_state=1))
+        # err_tr, err_va = evaluate_model(model, X, y, cross_val=cross_val, valid_size=valid_size, shuffle_data=shuffle_data, 
+        #                                 n_splits=n_splits, verbose=True, err_type=err_type)
+
+
         # ElasticNet
         print("\nbase model: ElasticNet (L2-loss with L1-reg and L2-reg)")
-        model = ElasticNet(alpha=0.5, l1_ratio=0.5, random_state=2)
+        # model = ElasticNet(alpha=1e-4, l1_ratio=0.5, random_state=2)
+        model = make_pipeline(RobustScaler(), ElasticNet(alpha=0.0005, l1_ratio=0.9, random_state=3))
+
         err_tr, err_va = evaluate_model(model, X, y, cross_val=cross_val, valid_size=valid_size, shuffle_data=shuffle_data, 
                                         n_splits=n_splits, verbose=True, err_type=err_type)
         # Ridge
@@ -611,10 +621,10 @@ if __name__ == "__main__":
 
 
     elif question == "averaging":
+        dataset_name = 'preprocessed'
         # dataset_name = 'sig_features'
-        # dataset_name = 'preprocessed'
         # dataset_name = 'anova_features'
-        dataset_name = 'xgb_features'
+        # dataset_name = 'xgb_features'
 
         # read preprocessed data as pandas dataframe
         df = pd.read_csv('../data/train_{}.csv'.format(dataset_name))
@@ -623,8 +633,9 @@ if __name__ == "__main__":
         y = df['SalePrice'].values
 
         n, d = np.shape(X)
+        print("num features: {}".format(d))
 
-        err_type = 'rmsle'  # 'abs', 'squared', 'rmsle'
+        err_type = 'rmse'  # 'abs', 'squared', 'rmsle'
         cross_val = True 
         valid_size = 0.25
         n_splits = 4
@@ -649,8 +660,8 @@ if __name__ == "__main__":
                                         n_splits=n_splits, verbose=True, err_type=err_type)
 
     elif question == "stacking":
-        # dataset_name = 'sig_features'
         # dataset_name = 'preprocessed'
+        # dataset_name = 'sig_features'
         # dataset_name = 'anova_features'
         dataset_name = 'xgb_features'
 
@@ -661,16 +672,17 @@ if __name__ == "__main__":
         y = df['SalePrice'].values
 
         n, d = np.shape(X)
+        print("num features: {}".format(d))
 
-        err_type = 'rmsle'  # 'abs', 'squared', 'rmsle'
+        err_type = 'rmse'  # 'abs', 'squared', 'rmsle'
         cross_val = True 
         valid_size = 0.25
         n_splits = 4
         shuffle_data = True
 
         base_models = []
-        base_models.append(Lasso(alpha=0.5, random_state=None))
-        base_models.append(ElasticNet(alpha=0.5, l1_ratio=0.5))
+        base_models.append(Lasso(alpha=0.0005, random_state=None))
+        base_models.append(ElasticNet(alpha=0.0005, l1_ratio=0.9))
         base_models.append(Ridge(alpha=1))
         base_models.append(KNeighborsRegressor(n_neighbors=10))
         base_models.append(lgb.LGBMRegressor(objective='regression', num_leaves=25, learning_rate=0.05))
@@ -681,13 +693,19 @@ if __name__ == "__main__":
         #                             lammy=1e-5, batch_size=32, epochs=100, 
         #                             num_workers=6, verbose=False)
 
-        # meta_model = Lasso(alpha=0.1) 
+        meta_model = Lasso(alpha=1e-4) 
         # meta_model = ElasticNet(alpha=1, l1_ratio=0.5)
-        meta_model = Ridge(alpha=1)
+        # meta_model = Ridge(alpha=1)
 
-        stacking_model = StackingRegressor(base_models, meta_model)
+        stacking_model = StackingRegressor(base_models, meta_model, n_folds=5)
         err_tr, err_va = evaluate_model(stacking_model, X, y, cross_val=cross_val, valid_size=valid_size, shuffle_data=shuffle_data, 
                                         n_splits=n_splits, verbose=True, err_type=err_type)
+
+        # print("Kaggle implementation")
+        # stacking_model = StackingAveragedModels(base_models, meta_model, n_folds=5)
+        # err_tr, err_va = evaluate_model(stacking_model, X, y, cross_val=cross_val, valid_size=valid_size, shuffle_data=shuffle_data, 
+        #                                 n_splits=n_splits, verbose=True, err_type=err_type)
+
 
     elif question == "base_model_tuning":
         # dataset_name = 'sig_features'
@@ -713,7 +731,7 @@ if __name__ == "__main__":
         
         # tunable vars
         # alphas = np.linspace(0.1, 5, num=num_vars)
-        alphas = np.linspace(0.1, 1, num=num_vars)
+        alphas = np.linspace(1e-4, 1, num=num_vars)
         n_neighbors = np.linspace(1, 50, num=num_vars, dtype=int)
         num_leaves = np.linspace(5, 200, num=num_vars, dtype=int)
         max_depths = np.linspace(5, 100, num=num_vars, dtype=int)

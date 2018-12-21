@@ -44,7 +44,7 @@ def standardize_dataset(data, data_valid, include_y_int=True):
 
     return X, y, X_valid, y_valid
 
-def evaluate_model(model, X, y, cross_val=False, valid_size=0.1, n_splits=10, shuffle_data=True, random_state=None, verbose=False, err_type='abs'):
+def evaluate_model(model, X, y, cross_val=False, valid_size=0.2, n_splits=5, shuffle_data=True, random_state=None, verbose=False, err_type='rmse'):
     """ Evaluate model by splitting dataset into training and validation 
     sets and report both training and validation errors
     
@@ -105,6 +105,10 @@ def evaluate_model(model, X, y, cross_val=False, valid_size=0.1, n_splits=10, sh
         print("training error: {0:.6g}".format(err_tr))
         print("validation error: {0:.6g}".format(err_va))
 
+    # kf = KFold(n_splits=n_splits, shuffle=shuffle_data).get_n_splits(X)
+    # rmse = np.sqrt(-cross_val_score(model, X, y, scoring='neg_mean_squared_error', cv=kf))
+    # print("rmse mean: {}".format(rmse.mean()))
+
     return err_tr, err_va
 
 def _evaluate(model, X_train, y_train, X_valid=None, y_valid=None, err_type='abs'):
@@ -135,6 +139,8 @@ def _evaluate(model, X_train, y_train, X_valid=None, y_valid=None, err_type='abs
         err_tr = mean_absolute_error(y_train, y_hat)
     elif err_type == 'rmsle':
         err_tr = np.sqrt(mean_squared_log_error(y_train, y_hat))
+    elif err_type == 'rmse':
+        err_tr = np.sqrt(mean_squared_error(y_train, y_hat))
 
     if X_valid is not None and y_valid is not None:
         y_hat = model.predict(X_valid)
@@ -145,7 +151,11 @@ def _evaluate(model, X_train, y_train, X_valid=None, y_valid=None, err_type='abs
             err_va = mean_absolute_error(y_valid, y_hat)
         elif err_type == 'rmsle':
             err_va = np.sqrt(mean_squared_log_error(y_valid, y_hat))
+        elif err_type == 'rmse':
+            err_va = np.sqrt(mean_squared_error(y_valid, y_hat))
     else:
         err_va = None
 
     return err_tr, err_va
+
+

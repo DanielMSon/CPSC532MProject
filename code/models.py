@@ -11,6 +11,10 @@ from utils import evaluate_model
 import matplotlib.pyplot as plt
 import os
 
+from sklearn.base import BaseEstimator, TransformerMixin, RegressorMixin, clone
+from sklearn.model_selection import KFold
+
+
 # use pytorch to implement neural network
 try:
     import torch
@@ -311,7 +315,7 @@ class AveragingRegressor():
 class StackingRegressor():
     """ a simple ensemble stacking class """
 
-    def __init__(self, base_models, meta_model):
+    def __init__(self, base_models, meta_model, n_folds=5):
         """ constructor
         
         Arguments:
@@ -321,6 +325,8 @@ class StackingRegressor():
 
         self.base_models = base_models
         self.meta_model = meta_model
+        self.n_folds = n_folds
+        self.base_model_instances = [[] for _ in base_models]
         
     def fit(self, X_train, y_train):
         """ train stacking regressor
@@ -330,8 +336,7 @@ class StackingRegressor():
             y_train {ndarray} -- y training
         """
 
-        self._base_model_fit(X_train, y_train)
-        Z_train = self._base_model_predict(X_train)
+        Z_train = self._base_model_train(X_train, y_train)
 
         self.meta_model.fit(Z_train, y_train)
 
@@ -350,7 +355,7 @@ class StackingRegressor():
         
         return yhats
 
-    def _base_model_fit(self, X_train, y_train):
+    def _base_model_train(self, X, y):
         """ helper function to train the base models
         
         Arguments:
@@ -358,8 +363,26 @@ class StackingRegressor():
             y_train {ndarray} -- y training
         """
 
-        for model in self.base_models:
-            model.fit(X_train, y_train)
+        n, d = np.shape(X)
+
+        # internal cross validation for training
+        kf = KFold(n_splits=self.n_folds, shuffle=True, random_state=None)
+        Z = np.empty((n, len(self.base_models)))
+
+        for i, model in enumerate(self.base_models, 0):
+            
+            Z_col = np.empty(n)
+            for train_index, valid_index in kf.split(X, y):
+                model_instance = clone(model)
+                model_instance.fit(X[train_index], y[train_index])
+                Z_instance = model_instance.predict(X[valid_index])
+                self.base_model_instances[i].append(model_instance)
+
+                Z_col[valid_index] = Z_instance
+
+            Z[:, i] = Z_col
+
+        return Z
 
     def _base_model_predict(self, X):
         """ helper function to get prediction from base models
@@ -370,9 +393,50 @@ class StackingRegressor():
         Returns:
             {ndarray} -- predictions
         """
+        n, d = np.shape(X)
+        Z = np.empty((n, len(self.base_models)))
+        
+        for i, instances in enumerate(self.base_model_instances, 0):
+            Z_col = np.mean([instance.predict(X) for instance in instances], axis=0)
+            Z[:, i] = Z_col
 
-        Z = np.column_stack([model.predict(X) for model in self.base_models])
         return Z
+
+# Kaggle implementation
+class StackingAveragedModels(BaseEstimator, RegressorMixin, TransformerMixin):
+    def __init__(self, base_models, meta_model, n_folds=5):
+        self.base_models = base_models
+        self.meta_model = meta_model
+        self.n_folds = n_folds
+
+    # We again fit the data on clones of the original models
+    def fit(self, X, y):
+        self.base_models_ = [list() for x in self.base_models]
+        self.meta_model_ = clone(self.meta_model)
+        kfold = KFold(n_splits=self.n_folds, shuffle=True, random_state=156)
+        
+        # Train cloned base models then create out-of-fold predictions
+        # that are needed to train the cloned meta-model
+        out_of_fold_predictions = np.zeros((X.shape[0], len(self.base_models)))
+        for i, model in enumerate(self.base_models):
+            for train_index, holdout_index in kfold.split(X, y):
+                instance = clone(model)
+                self.base_models_[i].append(instance)
+                instance.fit(X[train_index], y[train_index])
+                y_pred = instance.predict(X[holdout_index])
+                out_of_fold_predictions[holdout_index, i] = y_pred
+                
+        # Now train the cloned  meta-model using the out-of-fold predictions as new feature
+        self.meta_model_.fit(out_of_fold_predictions, y)
+        return self
+
+    #Do the predictions of all base models on the test data and use the averaged predictions as 
+    #meta-features for the final prediction which is done by the meta-model
+    def predict(self, X):
+        meta_features = np.column_stack([
+            np.column_stack([model.predict(X) for model in base_models]).mean(axis=1)
+            for base_models in self.base_models_ ])
+        return self.meta_model_.predict(meta_features)
 
 def neuralNetHyperparamTuning(  hyperparam, hyperparam_vals, X, y, 
                                 lr=1e-3, momentum=0.9, lammy=1e-5, batch_size=32, 
